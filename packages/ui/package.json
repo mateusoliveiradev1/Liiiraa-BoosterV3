@@ -1,0 +1,26 @@
+{
+  "name": "@liiiraa/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/verify-token-snapshot.mjs",
+    "check": "node scripts/verify-token-snapshot.mjs",
+    "format": "node -e \"console.log('No formatting step for @liiiraa/ui yet')\"",
+    "lint": "node scripts/verify-token-snapshot.mjs",
+    "test": "node scripts/verify-token-snapshot.mjs",
+    "typecheck": "node -e \"console.log('No TypeScript compiler configured for @liiiraa/ui yet')\""
+  },
+  "files": [
+    "src",
+    "styles",
+    "tokens"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme.css": "./styles/theme.css",
+    "./tailwind.css": "./styles/tailwind.css",
+    "./tokens": "./src/tokens.ts",
+    "./tokens.json": "./tokens/liiiraa.tokens.json"
+  }
+}

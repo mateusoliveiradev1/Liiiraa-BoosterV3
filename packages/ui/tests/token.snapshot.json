@@ -1,0 +1,120 @@
+{
+  "meta": {
+    "product": "Liiiraa Booster",
+    "signature": "Signed by Liiiraa",
+    "theme": "dark command center",
+    "version": "0.1.0"
+  },
+  "colors": {
+    "background": {
+      "app": "#0b0f14",
+      "appSubtle": "#10161d",
+      "workspace": "#111820",
+      "overlay": "rgba(5, 8, 12, 0.78)"
+    },
+    "surface": {
+      "panel": "#151d26",
+      "panelAlt": "#1a2430",
+      "raised": "#202b37",
+      "sunken": "#0f151c",
+      "selected": "#173446",
+      "disabled": "#222a33"
+    },
+    "text": {
+      "primary": "#f5f8fb",
+      "secondary": "#b6c2cf",
+      "muted": "#7d8a99",
+      "inverse": "#071015",
+      "disabled": "#5f6b78"
+    },
+    "accent": {
+      "telemetry": "#27d7ff",
+      "telemetrySoft": "#124a5c",
+      "performance": "#3af28f",
+      "performanceSoft": "#0f5c38",
+      "violet": "#9b7cff",
+      "violetSoft": "#2b2454"
+    },
+    "status": {
+      "success": "#3af28f",
+      "successSurface": "#0f3b29",
+      "active": "#27d7ff",
+      "activeSurface": "#103a49",
+      "warning": "#ffbd5a",
+      "warningSurface": "#4b3214",
+      "danger": "#ff5a67",
+      "dangerSurface": "#4a1f28",
+      "neutral": "#9aa8b8",
+      "neutralSurface": "#26313d"
+    },
+    "risk": {
+      "low": "#3af28f",
+      "medium": "#27d7ff",
+      "high": "#ffbd5a",
+      "critical": "#ff5a67",
+      "lab": "#9b7cff"
+    },
+    "mode": {
+      "safe": "#3af28f",
+      "competitive": "#ffbd5a",
+      "lab": "#9b7cff",
+      "blocked": "#ff5a67"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "ui": "Inter, Geist, Segoe UI, system-ui, sans-serif",
+      "metric": "JetBrains Mono, Geist Mono, Consolas, monospace"
+    },
+    "fontSize": {
+      "caption": "0.75rem",
+      "control": "0.8125rem",
+      "body": "0.875rem",
+      "label": "0.875rem",
+      "title": "1rem",
+      "section": "1.25rem",
+      "display": "2rem"
+    },
+    "lineHeight": {
+      "tight": "1.15",
+      "control": "1.25",
+      "body": "1.45",
+      "display": "1.1"
+    },
+    "letterSpacing": {
+      "default": "0",
+      "caps": "0.08em"
+    }
+  },
+  "radius": {
+    "none": "0",
+    "xs": "0.125rem",
+    "sm": "0.25rem",
+    "md": "0.375rem",
+    "card": "0.5rem",
+    "pill": "999px"
+  },
+  "components": {
+    "rail": {
+      "width": "4.5rem",
+      "expandedWidth": "15rem"
+    },
+    "statusStrip": {
+      "height": "2.75rem"
+    },
+    "toolbar": {
+      "height": "2.5rem",
+      "iconButton": "2rem"
+    },
+    "metricTile": {
+      "minHeight": "6rem"
+    },
+    "actionBar": {
+      "height": "4.25rem"
+    },
+    "focusRing": {
+      "width": "2px",
+      "offset": "2px"
+    }
+  }
+}

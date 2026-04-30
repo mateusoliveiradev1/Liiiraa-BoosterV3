@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@import "./theme.css";
+
+@layer base {
+  html {
+    background: var(--liiiraa-color-background-app);
+    color: var(--liiiraa-color-text-primary);
+    font-family: var(--liiiraa-font-ui);
+    letter-spacing: 0;
+  }
+
+  body {
+    min-width: 320px;
+    background: var(--liiiraa-color-background-app);
+    color: var(--liiiraa-color-text-primary);
+    font-family: var(--liiiraa-font-ui);
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--liiiraa-color-focus);
+    outline-offset: 2px;
+    box-shadow: var(--liiiraa-shadow-focus);
+  }
+
+  [data-liiiraa-metric="true"] {
+    font-family: var(--liiiraa-font-metric);
+    font-variant-numeric: tabular-nums;
+  }
+}
