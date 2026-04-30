@@ -1,5 +1,11 @@
 export { liiiraaTokens } from "./tokens";
 export {
+  assertOptimizationWorkflowSmoke,
+  optimizationModeOptions,
+  optimizationWorkflow,
+  renderOptimizationWorkflowSmokeHtml
+} from "./optimizationWorkflow.js";
+export {
   assertPrimitiveA11ySmoke,
   createButtonPrimitive,
   createIconButtonPrimitive,
