@@ -1,7 +1,9 @@
 //! Windows implementation adapters for registry, power, services, and devices.
 
+pub mod backup;
 pub mod command;
 
+pub use backup::WindowsRollbackFixture;
 pub use command::{
     FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
 };
