@@ -1,0 +1,12 @@
+[package]
+name = "pubg"
+version = "0.1.0"
+description = "PUBG discovery, settings inspection, and safe recommendation planning for Liiiraa Boost."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

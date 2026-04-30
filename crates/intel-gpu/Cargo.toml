@@ -1,0 +1,12 @@
+[package]
+name = "intel-gpu"
+version = "0.1.0"
+description = "Intel graphics detection and recommendation planning for Liiiraa Boost."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+description = "Benchmark capture, parsing, and scoring primitives for Liiiraa Boost."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

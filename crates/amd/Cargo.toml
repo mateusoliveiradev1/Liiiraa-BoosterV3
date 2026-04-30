@@ -1,0 +1,12 @@
+[package]
+name = "amd"
+version = "0.1.0"
+description = "AMD GPU profile planning and safe Adrenalin guidance for Liiiraa Boost."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "windows-agent"
+version = "0.1.0"
+description = "Elevated Windows agent boundary for privileged optimizer actions."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "windows-api"
+version = "0.1.0"
+description = "Windows implementation adapters for registry, power, services, and devices."
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
