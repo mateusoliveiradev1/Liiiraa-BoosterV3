@@ -2,6 +2,7 @@
 
 pub mod ipc;
 pub mod protected_storage;
+pub mod tweak_contracts;
 
 /// Static metadata describing this workspace crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
