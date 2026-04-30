@@ -1,9 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Default-deny capability for the main Liiiraa Booster window. It intentionally grants no filesystem, shell, process, dialog, HTTP, clipboard, notification, updater, OS, plugin, or custom command permissions until a later task adds a narrowly scoped permission.",
+  "description": "Default-deny capability for the main Liiiraa Booster window. It grants only the read-only typed IPC security status command and no filesystem, shell, process, dialog, HTTP, clipboard, notification, updater, OS, plugin, or privileged custom command permissions.",
   "windows": ["main"],
   "platforms": ["windows"],
   "local": true,
-  "permissions": []
+  "permissions": ["allow-get-ipc-security-status"]
 }

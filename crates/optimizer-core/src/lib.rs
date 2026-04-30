@@ -1,5 +1,7 @@
 //! Pure tweak planning, policy, validation, and risk modeling.
 
+pub mod ipc;
+
 /// Static metadata describing this workspace crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CrateInfo {
