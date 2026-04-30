@@ -1,0 +1,65 @@
+# Local agent/editor state
+.codex/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.envrc
+.direnv/
+*.secret
+*.secrets.*
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+*.cer
+*.mobileprovision
+*.keystore
+*.jks
+secrets/
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+dist/
+build/
+.turbo/
+.vite/
+
+# Rust / Tauri
+target/
+src-tauri/target/
+**/src-tauri/target/
+
+# Desktop build outputs
+*.msi
+*.exe
+*.msix
+*.appx
+*.appinstaller
+*.dmg
+*.deb
+*.rpm
+
+# Logs and local databases
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
