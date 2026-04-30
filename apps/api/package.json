@@ -1,0 +1,21 @@
+{
+  "name": "@liiiraa/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node --test tests/*.test.mjs",
+    "check": "node --test tests/*.test.mjs",
+    "lint": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "node -e \"console.log('API baseline uses runtime contract tests until the Fastify/tRPC scaffold lands')\""
+  },
+  "dependencies": {
+    "@liiiraa/api-contract": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./config": "./src/config.js",
+    "./security-baseline": "./src/security-baseline.js"
+  }
+}
