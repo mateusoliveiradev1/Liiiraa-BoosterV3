@@ -1,5 +1,11 @@
 //! Windows implementation adapters for registry, power, services, and devices.
 
+pub mod command;
+
+pub use command::{
+    FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
+};
+
 /// Static metadata describing this workspace crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CrateInfo {
