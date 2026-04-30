@@ -1,6 +1,7 @@
 //! Pure tweak planning, policy, validation, and risk modeling.
 
 pub mod ipc;
+pub mod catalog;
 pub mod protected_storage;
 pub mod tweak_contracts;
 
