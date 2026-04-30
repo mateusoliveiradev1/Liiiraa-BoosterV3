@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "scanMode": "read_only",
+  "collectedAtUtc": "2026-04-30T12:00:00Z",
+  "os": {
+    "caption": "Microsoft Windows 11 Pro",
+    "version": "10.0.26100",
+    "buildNumber": "26100",
+    "edition": "48",
+    "architecture": "64-bit",
+    "lastBootUpTime": "2026-04-30T09:00:00Z",
+    "installDate": "2026-01-01T00:00:00Z",
+    "totalVisibleMemoryBytes": 34294956032,
+    "freePhysicalMemoryBytes": 17179869184
+  },
+  "memory": {
+    "totalVisibleMemoryBytes": 34294956032,
+    "freePhysicalMemoryBytes": 17179869184,
+    "modules": [
+      {
+        "manufacturer": "Example",
+        "partNumber": "DDR5-6000",
+        "capacityBytes": 17179869184,
+        "speedMhz": 6000
+      },
+      {
+        "manufacturer": "Example",
+        "partNumber": "DDR5-6000",
+        "capacityBytes": 17179869184,
+        "speedMhz": 6000
+      }
+    ]
+  },
+  "cpus": [
+    {
+      "name": "AMD Ryzen 7 7800X3D 8-Core Processor",
+      "manufacturer": "AuthenticAMD",
+      "architecture": "9",
+      "physicalCores": 8,
+      "logicalProcessors": 16,
+      "maxClockMhz": 4200
+    }
+  ],
+  "gpus": [
+    {
+      "name": "NVIDIA GeForce RTX 4070 SUPER",
+      "driverVersion": "32.0.15.7652",
+      "videoProcessor": "NVIDIA GeForce RTX 4070 SUPER",
+      "adapterRamBytes": 4293918720,
+      "pnpDeviceId": "PCI\\VEN_10DE&DEV_2783"
+    }
+  ],
+  "storage": {
+    "volumes": [
+      {
+        "deviceId": "C:",
+        "volumeName": "Windows",
+        "fileSystem": "NTFS",
+        "totalBytes": 999653638144,
+        "freeBytes": 612032413696,
+        "driveType": 3
+      }
+    ],
+    "physicalDisks": [
+      {
+        "friendlyName": "Example NVMe SSD",
+        "mediaType": "SSD",
+        "busType": "NVMe",
+        "healthStatus": "Healthy",
+        "sizeBytes": 1000204886016
+      }
+    ]
+  },
+  "networkAdapters": [
+    {
+      "name": "Realtek Gaming 2.5GbE Family Controller",
+      "adapterType": "Ethernet 802.3",
+      "macAddress": "00:11:22:33:44:55",
+      "netConnectionId": "Ethernet",
+      "netConnectionStatus": 2,
+      "speedBitsPerSecond": 2500000000
+    }
+  ],
+  "services": [
+    {
+      "name": "W32Time",
+      "displayName": "Windows Time",
+      "state": "Running",
+      "startMode": "Manual"
+    }
+  ],
+  "scheduledTasks": [
+    {
+      "taskName": "Scheduled Start",
+      "taskPath": "\\Microsoft\\Windows\\Defrag\\",
+      "state": "Ready"
+    }
+  ],
+  "startupApps": [
+    {
+      "name": "Discord",
+      "command": "C:\\Users\\Liiiraa\\AppData\\Local\\Discord\\Update.exe --processStart Discord.exe",
+      "location": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "user": "DESKTOP\\Liiiraa"
+    }
+  ],
+  "power": {
+    "activeSchemeGuid": "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "activeSchemeName": "Balanced",
+    "source": "powercfg /getactivescheme"
+  },
+  "security": {
+    "deviceGuard": {
+      "virtualizationBasedSecurityStatus": 2,
+      "securityServicesConfigured": [1, 2],
+      "securityServicesRunning": [1, 2],
+      "usermodeCodeIntegrityPolicyEnforcementStatus": 2,
+      "codeIntegrityPolicyEnforcementStatus": 2
+    },
+    "hvci": {
+      "enabled": 1,
+      "locked": 0
+    },
+    "defender": {
+      "antivirusEnabled": true,
+      "realTimeProtectionEnabled": true,
+      "tamperProtected": true,
+      "antispywareEnabled": true
+    }
+  },
+  "rebootRequired": {
+    "componentBasedServicing": false,
+    "windowsUpdate": false,
+    "pendingFileRename": false
+  },
+  "collectionErrors": []
+}

@@ -2,10 +2,18 @@
 
 pub mod backup;
 pub mod command;
+pub mod scan;
 
 pub use backup::WindowsRollbackFixture;
 pub use command::{
     FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
+};
+pub use scan::{
+    parse_system_scan_report, scan_system, CpuScanItem, DefenderScan, GpuScanItem,
+    MemoryModuleScanItem, MemoryScan, NetworkAdapterScanItem, OsScan, PhysicalDiskScanItem,
+    PowerPlanScan, RebootRequiredScan, ScheduledTaskScanItem, SecurityScan, ServiceScanItem,
+    StartupAppScanItem, StorageScan, StorageVolumeScanItem, SystemScanError,
+    SystemScanErrorReason, SystemScanMode, SystemScanReport, WindowsSystemScanner,
 };
 
 /// Static metadata describing this workspace crate.
