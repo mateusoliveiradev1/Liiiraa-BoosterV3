@@ -6,6 +6,7 @@ import { PowerRoute } from "./PowerRoute";
 import { PubgRoute } from "./PubgRoute";
 import { RollbackRoute } from "./RollbackRoute";
 import { ScanRoute } from "./ScanRoute";
+import { SettingsRoute } from "./settingsRoute";
 
 export const optimizationRoutes = [
   {
@@ -47,6 +48,11 @@ export const optimizationRoutes = [
     id: "rollback",
     label: "Rollback",
     element: <RollbackRoute />
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    element: <SettingsRoute />
   }
 ];
 
@@ -60,3 +66,4 @@ export { PowerRoute } from "./PowerRoute";
 export { PubgRoute } from "./PubgRoute";
 export { RollbackRoute } from "./RollbackRoute";
 export { ScanRoute } from "./ScanRoute";
+export { SettingsRoute } from "./settingsRoute";

@@ -14,3 +14,13 @@ export {
   redactApiError,
   validateApiProcedureRequest
 } from "./security-baseline.js";
+export {
+  API_PRIVACY_CONSENT_VERSION,
+  PrivacyConsentRequiredError,
+  assertApiPrivacyConsentCoverage,
+  createApiPrivacyConsentState,
+  createPrivacySafeSyncDecision,
+  evaluateApiPrivacyConsentGate,
+  privacyConsentRequirements,
+  requireApiPrivacyConsent
+} from "./privacy-consent.js";

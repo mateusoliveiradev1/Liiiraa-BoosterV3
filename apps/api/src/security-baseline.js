@@ -5,6 +5,7 @@ import {
   validateSecurityEnvelope
 } from "../../../packages/api-contract/src/index.js";
 import { loadApiSecurityConfig } from "./config.js";
+import { evaluateApiPrivacyConsentGate, requireApiPrivacyConsent } from "./privacy-consent.js";
 
 const SENSITIVE_HEADER_PATTERN =
   /^(authorization|cookie|set-cookie|x-api-key|x-auth-token|x-csrf-token|x-session|proxy-authorization)$/i;
@@ -37,6 +38,12 @@ export function createApiSecurityBaseline(options = {}) {
     },
     validateProcedure(request) {
       return validateApiProcedureRequest(request);
+    },
+    evaluateConsent(request, consentOptions) {
+      return evaluateApiPrivacyConsentGate(request, consentOptions);
+    },
+    requireConsent(request, consentOptions) {
+      return requireApiPrivacyConsent(request, consentOptions);
     }
   };
 }
@@ -164,6 +171,26 @@ export function redactApiError(error, options = {}) {
       error: {
         code: error.code,
         issues: error.issues.map(redactIssue),
+        message: "Request validation failed.",
+        requestId
+      }
+    };
+  }
+
+  if (error?.code === "CONSENT_REQUIRED") {
+    return {
+      error: {
+        code: "CONSENT_REQUIRED",
+        message: "Explicit consent is required before cloud upload.",
+        requestId
+      }
+    };
+  }
+
+  if (error?.code === "INVALID_CONSENT_SCOPE") {
+    return {
+      error: {
+        code: "BAD_REQUEST",
         message: "Request validation failed.",
         requestId
       }

@@ -8,6 +8,7 @@ import type {
   SettingsTrustToggle,
   SettingsTrustTone
 } from "../../../../../packages/ui/src/settingsTrust.js";
+import type { PrivacyConsentGateSummary } from "../../privacyConsent";
 
 type ToneItem = {
   id: string;
@@ -74,7 +75,13 @@ const toggleRowStyle: CSSProperties = {
   alignItems: "start"
 };
 
-export function SettingsTrustSurfaces({ data }: { data: SettingsTrustData }) {
+export function SettingsTrustSurfaces({
+  consentGates,
+  data
+}: {
+  consentGates?: PrivacyConsentGateSummary[];
+  data: SettingsTrustData;
+}) {
   return (
     <div style={viewGridStyle} aria-label="Settings privacy update and trust surfaces">
       <header className="page-header">
@@ -103,6 +110,12 @@ export function SettingsTrustSurfaces({ data }: { data: SettingsTrustData }) {
             ))}
           </div>
         </Surface>
+
+        {consentGates ? (
+          <Surface title="Consent gates" eyebrow="Uploads blocked by default">
+            <ToneList items={consentGates} />
+          </Surface>
+        ) : null}
 
         <Surface title="Update channel" eyebrow="Signed release lanes">
           <div style={compactRowStyle} role="radiogroup" aria-label="Update channel">
