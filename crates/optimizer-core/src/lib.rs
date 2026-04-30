@@ -2,6 +2,7 @@
 
 pub mod ipc;
 pub mod catalog;
+pub mod planning;
 pub mod protected_storage;
 pub mod tweak_contracts;
 
