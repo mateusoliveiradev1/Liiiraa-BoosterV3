@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="176" viewBox="0 0 720 176" role="img" aria-labelledby="liiiraaLogoTitle liiiraaLogoDesc">
+  <title id="liiiraaLogoTitle">Liiiraa Booster logo</title>
+  <desc id="liiiraaLogoDesc">The Liiiraa Booster wordmark paired with a custom shield and speed-line L mark.</desc>
+  <g transform="translate(24 24)">
+    <path d="M64 7 111 28v35c0 32-18 50-47 58-29-8-47-26-47-58V28L64 7Z" fill="#0f151c" stroke="#344252" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M24 42h18M19 61h17M25 80h15" fill="none" stroke="#3af28f" stroke-width="7" stroke-linecap="square"/>
+    <path d="M45 29h22v51h35v20H45V29Z" fill="#27d7ff"/>
+    <path d="M66 29h20L64 66h24L50 101l14-37H45V48h12L66 29Z" fill="#0b0f14"/>
+    <path d="M45 29h22v51h35v20H45V29Z" fill="none" stroke="#9eefff" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M34 102h75" fill="none" stroke="#ffbd5a" stroke-width="5" stroke-linecap="square"/>
+  </g>
+  <g fill="#f5f8fb" font-family="Inter, Geist, Segoe UI, Arial, sans-serif" letter-spacing="0">
+    <text x="184" y="79" font-size="54" font-weight="700">Liiiraa</text>
+    <text x="184" y="124" font-size="39" font-weight="600" fill="#b6c2cf">Booster</text>
+    <text x="430" y="124" font-size="18" font-weight="600" fill="#3af28f">Signed by Liiiraa</text>
+  </g>
+  <path d="M184 142h400" fill="none" stroke="#2a3541" stroke-width="2"/>
+  <path d="M184 142h132" fill="none" stroke="#27d7ff" stroke-width="2"/>
+</svg>
