@@ -5,6 +5,7 @@ members = [
     "crates/cpu",
     "crates/gpu",
     "crates/intel-gpu",
+    "crates/local-store",
     "crates/nvidia",
     "crates/optimizer-core",
     "crates/pubg",
