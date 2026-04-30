@@ -93,6 +93,75 @@ export interface OptimizationWorkflowRollbackSession {
   items: OptimizationWorkflowRollbackItem[];
 }
 
+export interface OptimizationWorkflowPowerPlan {
+  id: string;
+  label: string;
+  mode: string;
+  state: string;
+  detail: string;
+  rollback: string;
+  defaults: string;
+  tone: OptimizationWorkflowTone;
+}
+
+export interface OptimizationWorkflowNvidiaProfile {
+  id: string;
+  label: string;
+  scope: string;
+  state: string;
+  recommendation: string;
+  rollback: string;
+  tone: OptimizationWorkflowTone;
+}
+
+export interface OptimizationWorkflowPubgDxChoice {
+  id: string;
+  label: string;
+  evidence: string;
+  rollback: string;
+  state: string;
+  tone: OptimizationWorkflowTone;
+}
+
+export interface OptimizationWorkflowBenchmarkPoint {
+  id: string;
+  label: string;
+  averageFps: number;
+  onePercentLow: number;
+  p95FrameMs: number;
+  tone: OptimizationWorkflowTone;
+}
+
+export interface OptimizationWorkflowGaming {
+  power: {
+    metrics: OptimizationWorkflowMetric[];
+    actions: OptimizationWorkflowAction[];
+    plans: OptimizationWorkflowPowerPlan[];
+    rules: OptimizationWorkflowSignal[];
+  };
+  nvidia: {
+    metrics: OptimizationWorkflowMetric[];
+    actions: OptimizationWorkflowAction[];
+    profiles: OptimizationWorkflowNvidiaProfile[];
+    policies: OptimizationWorkflowSignal[];
+    capLogic: Array<[string, string]>;
+  };
+  pubg: {
+    metrics: OptimizationWorkflowMetric[];
+    actions: OptimizationWorkflowAction[];
+    detections: OptimizationWorkflowSignal[];
+    dxChoices: OptimizationWorkflowPubgDxChoice[];
+    checklist: OptimizationWorkflowSignal[];
+  };
+  benchmarks: {
+    metrics: OptimizationWorkflowMetric[];
+    actions: OptimizationWorkflowAction[];
+    chart: OptimizationWorkflowBenchmarkPoint[];
+    metadata: Array<[string, string]>;
+    sessions: OptimizationWorkflowSignal[];
+  };
+}
+
 export interface OptimizationWorkflow {
   dashboard: {
     readinessScore: number;
@@ -125,6 +194,7 @@ export interface OptimizationWorkflow {
   rollback: {
     sessions: OptimizationWorkflowRollbackSession[];
   };
+  gaming: OptimizationWorkflowGaming;
   guardrails: string[];
 }
 

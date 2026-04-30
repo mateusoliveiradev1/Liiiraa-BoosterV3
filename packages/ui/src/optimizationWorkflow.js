@@ -475,6 +475,517 @@ export const optimizationWorkflow = {
       }
     ]
   },
+  gaming: {
+    power: {
+      metrics: [
+        {
+          id: "active-plan",
+          label: "Active plan",
+          value: "Balanced",
+          detail: "Baseline captured",
+          tone: "neutral"
+        },
+        {
+          id: "desktop-policy",
+          label: "Desktop",
+          value: "Safe",
+          detail: "Performance plan allowed",
+          tone: "success"
+        },
+        {
+          id: "laptop-policy",
+          label: "Laptop",
+          value: "Consent",
+          detail: "Heat and battery warning",
+          tone: "warning"
+        },
+        {
+          id: "rollback",
+          label: "Rollback",
+          value: "Full",
+          detail: "Previous scheme stored",
+          tone: "success"
+        }
+      ],
+      actions: [
+        {
+          id: "stage-balanced",
+          label: "Stage balanced",
+          variant: "primary"
+        },
+        {
+          id: "review-competitive",
+          label: "Review competitive",
+          variant: "secondary"
+        },
+        {
+          id: "export-power-plan",
+          label: "Export plan",
+          variant: "ghost"
+        }
+      ],
+      plans: [
+        {
+          id: "power.plan.liiiraa-balanced",
+          label: "Liiiraa Boost - Balanced",
+          mode: "Safe",
+          state: "Ready",
+          detail: "Duplicate current or Balanced plan before tuning.",
+          rollback: "Restore previous active scheme",
+          defaults: "On",
+          tone: "success"
+        },
+        {
+          id: "power.plan.liiiraa-performance",
+          label: "Liiiraa Boost - Performance",
+          mode: "Safe desktop, Competitive laptop",
+          state: "Staged",
+          detail: "Scoped AC performance values without global system defaults.",
+          rollback: "Remove created GUID and restore prior plan",
+          defaults: "Desktop on",
+          tone: "warning"
+        },
+        {
+          id: "power.plan.liiiraa-competitive",
+          label: "Liiiraa Boost - Competitive",
+          mode: "Competitive",
+          state: "Locked",
+          detail: "More aggressive AC-only values with explicit tradeoff review.",
+          rollback: "Restore all backed-up plan values",
+          defaults: "Off",
+          tone: "warning"
+        }
+      ],
+      rules: [
+        {
+          id: "usb",
+          label: "USB selective suspend",
+          value: "Scoped off",
+          detail: "Applies only inside Liiiraa plans to reduce device wake latency.",
+          tone: "success"
+        },
+        {
+          id: "pcie",
+          label: "PCIe link state",
+          value: "Desktop safe",
+          detail: "Laptop path requires heat and battery disclosure before apply.",
+          tone: "warning"
+        },
+        {
+          id: "processor",
+          label: "Processor bias",
+          value: "Competitive",
+          detail: "EPP/min-max changes stay inside Liiiraa plans and require evidence.",
+          tone: "warning"
+        },
+        {
+          id: "core-parking",
+          label: "Core parking",
+          value: "Lab only",
+          detail: "Benchmark experiment, never part of safe defaults.",
+          tone: "lab"
+        }
+      ]
+    },
+    nvidia: {
+      metrics: [
+        {
+          id: "gpu",
+          label: "GPU",
+          value: "RTX 4070",
+          detail: "NVIDIA detected",
+          tone: "success"
+        },
+        {
+          id: "driver",
+          label: "Driver",
+          value: "551.86",
+          detail: "Game Ready branch",
+          tone: "success"
+        },
+        {
+          id: "nvapi",
+          label: "Profile API",
+          value: "Ready",
+          detail: "Backup required",
+          tone: "active"
+        },
+        {
+          id: "display",
+          label: "Refresh",
+          value: "240 Hz",
+          detail: "VRR detected",
+          tone: "active"
+        },
+        {
+          id: "pubg-profile",
+          label: "PUBG profile",
+          value: "Staged",
+          detail: "TslGame.exe scoped",
+          tone: "warning"
+        },
+        {
+          id: "battleye",
+          label: "BattlEye",
+          value: "Clear",
+          detail: "No process lock",
+          tone: "success"
+        }
+      ],
+      actions: [
+        {
+          id: "backup-profiles",
+          label: "Back up profiles",
+          variant: "primary"
+        },
+        {
+          id: "stage-pubg-profile",
+          label: "Stage PUBG profile",
+          variant: "secondary"
+        },
+        {
+          id: "open-benchmark",
+          label: "Open benchmark",
+          variant: "ghost"
+        }
+      ],
+      profiles: [
+        {
+          id: "nvidia.global.profile",
+          label: "Liiiraa Boost - Global Performance",
+          scope: "Global profile",
+          state: "Backup required",
+          recommendation: "Conservative profile-level power and shader cache settings.",
+          rollback: "Import global backup",
+          tone: "success"
+        },
+        {
+          id: "nvidia.pubg.profile",
+          label: "Liiiraa Boost - PUBG Competitive",
+          scope: "TslGame.exe",
+          state: "Ready when PUBG is closed",
+          recommendation: "Low Latency On for non-Reflex paths, highest refresh, VRR cap logic.",
+          rollback: "Import PUBG profile backup",
+          tone: "warning"
+        },
+        {
+          id: "nvidia.rebar.hidden-override",
+          label: "Hidden ReBAR override",
+          scope: "NPI compatibility",
+          state: "Lab locked",
+          recommendation: "Benchmark-gated only; no global force or firmware flashing.",
+          rollback: "Restore profile backup",
+          tone: "lab"
+        }
+      ],
+      policies: [
+        {
+          id: "reflex",
+          label: "Reflex vs Low Latency",
+          value: "No blind stacking",
+          detail: "Prefer in-game Reflex when supported; driver LLM stays profile-specific.",
+          tone: "success"
+        },
+        {
+          id: "vrr-cap",
+          label: "VRR frame cap",
+          value: "237 FPS",
+          detail: "Recommended cap is below 240 Hz and tied to the PUBG profile.",
+          tone: "active"
+        },
+        {
+          id: "battleye",
+          label: "Mutation guard",
+          value: "Defer while running",
+          detail: "Profile writes are blocked when PUBG or BattlEye is active.",
+          tone: "warning"
+        },
+        {
+          id: "hidden-flags",
+          label: "Hidden bulk flags",
+          value: "Denied",
+          detail: "Undocumented dumps are not default optimization content.",
+          tone: "danger"
+        }
+      ],
+      capLogic: [
+        ["Display refresh", "240 Hz"],
+        ["VRR state", "Detected and enabled"],
+        ["Recommended cap", "237 FPS"],
+        ["Cap source", "Profile-specific, verified after write"],
+        ["V-SYNC policy", "Explained with VRR, not forced blindly"]
+      ]
+    },
+    pubg: {
+      metrics: [
+        {
+          id: "install",
+          label: "Install",
+          value: "Steam",
+          detail: "TslGame.exe found",
+          tone: "success"
+        },
+        {
+          id: "config",
+          label: "Config",
+          value: "Readable",
+          detail: "Snapshot required",
+          tone: "success"
+        },
+        {
+          id: "battleye",
+          label: "BattlEye",
+          value: "Protected",
+          detail: "No file or memory touch",
+          tone: "success"
+        },
+        {
+          id: "dx-mode",
+          label: "DX mode",
+          value: "Benchmark",
+          detail: "DX11 vs DX11 Enhanced",
+          tone: "warning"
+        },
+        {
+          id: "launch-options",
+          label: "Launch flags",
+          value: "Review",
+          detail: "Legacy flags detected",
+          tone: "warning"
+        },
+        {
+          id: "nvidia-link",
+          label: "NVIDIA",
+          value: "Linked",
+          detail: "PUBG profile staged",
+          tone: "active"
+        }
+      ],
+      actions: [
+        {
+          id: "snapshot-config",
+          label: "Snapshot config",
+          variant: "primary"
+        },
+        {
+          id: "start-dx-benchmark",
+          label: "Start DX benchmark",
+          variant: "secondary"
+        },
+        {
+          id: "open-nvidia-profile",
+          label: "Open NVIDIA profile",
+          variant: "ghost"
+        }
+      ],
+      detections: [
+        {
+          id: "exe",
+          label: "Executable",
+          value: "TslGame.exe",
+          detail: "Steam install path detected without modifying game folders.",
+          tone: "success"
+        },
+        {
+          id: "config",
+          label: "Config snapshot",
+          value: "Required",
+          detail: "Supported user config keys are read only until backup exists.",
+          tone: "active"
+        },
+        {
+          id: "launch",
+          label: "Launch options",
+          value: "Cleanup recommended",
+          detail: "Remove legacy viral flags instead of adding unsupported flags.",
+          tone: "warning"
+        },
+        {
+          id: "anticheat",
+          label: "Anti-cheat boundary",
+          value: "Strict",
+          detail: "No BattlEye files, game memory, binaries, kernel state, or integrity bypasses.",
+          tone: "danger"
+        }
+      ],
+      dxChoices: [
+        {
+          id: "dx11e",
+          label: "DX11 Enhanced",
+          evidence: "Candidate for modern CPUs after stability check.",
+          rollback: "Restore prior render mode",
+          state: "Benchmark required",
+          tone: "warning"
+        },
+        {
+          id: "dx11",
+          label: "DX11",
+          evidence: "Baseline path for compatibility comparison.",
+          rollback: "Restore prior render mode",
+          state: "Benchmark required",
+          tone: "active"
+        },
+        {
+          id: "dx12",
+          label: "DX12",
+          evidence: "Lab only if exposed by game and user opts in.",
+          rollback: "Restore prior render mode",
+          state: "Lab locked",
+          tone: "lab"
+        }
+      ],
+      checklist: [
+        {
+          id: "visibility",
+          label: "Visibility settings",
+          value: "Manual review",
+          detail: "Performance and visibility recommendations show risk before apply.",
+          tone: "success"
+        },
+        {
+          id: "nvidia",
+          label: "NVIDIA profile",
+          value: "Linked",
+          detail: "PUBG profile applies to TslGame.exe instead of forcing global settings.",
+          tone: "active"
+        },
+        {
+          id: "repair",
+          label: "Verify files",
+          value: "Store flow",
+          detail: "Crashes or corruption route to Steam/Epic repair, not file deletion.",
+          tone: "warning"
+        },
+        {
+          id: "blocked",
+          label: "Unsafe tweaks",
+          value: "Denied",
+          detail: "Realtime priority, memory edits, and BattlEye tamper remain blocked.",
+          tone: "danger"
+        }
+      ]
+    },
+    benchmarks: {
+      metrics: [
+        {
+          id: "avg-fps",
+          label: "Average",
+          value: "188",
+          detail: "FPS, native frames",
+          tone: "active"
+        },
+        {
+          id: "one-percent",
+          label: "1% low",
+          value: "142",
+          detail: "+11.8% vs baseline",
+          tone: "success"
+        },
+        {
+          id: "point-one",
+          label: "0.1% low",
+          value: "96",
+          detail: "+7.4% vs baseline",
+          tone: "success"
+        },
+        {
+          id: "p95",
+          label: "p95 frame",
+          value: "8.8 ms",
+          detail: "Lower is better",
+          tone: "active"
+        },
+        {
+          id: "variance",
+          label: "Variance",
+          value: "Medium",
+          detail: "Same map required",
+          tone: "warning"
+        },
+        {
+          id: "metadata",
+          label: "Metadata",
+          value: "Complete",
+          detail: "Driver, build, plan, catalog",
+          tone: "success"
+        }
+      ],
+      actions: [
+        {
+          id: "capture-before",
+          label: "Capture before",
+          variant: "primary"
+        },
+        {
+          id: "compare-after",
+          label: "Compare after",
+          variant: "secondary"
+        },
+        {
+          id: "export-benchmark",
+          label: "Export report",
+          variant: "ghost"
+        }
+      ],
+      chart: [
+        {
+          id: "baseline",
+          label: "Baseline",
+          averageFps: 176,
+          onePercentLow: 127,
+          p95FrameMs: 10.2,
+          tone: "neutral"
+        },
+        {
+          id: "safe-plan",
+          label: "Safe plan",
+          averageFps: 184,
+          onePercentLow: 136,
+          p95FrameMs: 9.3,
+          tone: "active"
+        },
+        {
+          id: "pubg-profile",
+          label: "PUBG profile",
+          averageFps: 188,
+          onePercentLow: 142,
+          p95FrameMs: 8.8,
+          tone: "success"
+        }
+      ],
+      metadata: [
+        ["Map/session", "Training range, 5 minute route"],
+        ["Driver", "NVIDIA 551.86"],
+        ["Windows build", "23H2, pending reboot clear"],
+        ["Power plan", "Liiiraa Boost - Performance"],
+        ["Catalog", "v1 local matrix"],
+        ["Generated frames", "Excluded from native FPS summary"]
+      ],
+      sessions: [
+        {
+          id: "bench-before",
+          label: "Before",
+          value: "Captured",
+          detail: "Baseline with Balanced plan and driver defaults.",
+          tone: "neutral"
+        },
+        {
+          id: "bench-after",
+          label: "After",
+          value: "Ready",
+          detail: "Safe plan plus PUBG profile, same metadata required.",
+          tone: "success"
+        },
+        {
+          id: "bench-variance",
+          label: "Confidence",
+          value: "Warn",
+          detail: "Result inside variance stays advisory instead of success.",
+          tone: "warning"
+        }
+      ]
+    }
+  },
   guardrails: [
     "Safe changes can be default selected.",
     "Competitive changes require explicit consent.",
@@ -540,6 +1051,48 @@ export function assertOptimizationWorkflowSmoke(workflow = optimizationWorkflow)
   if (missingApplySteps.length > 0) {
     throw new Error(`Apply flow steps missing: ${missingApplySteps.join(", ")}`);
   }
+
+  const gaming = workflow.gaming;
+  const requiredGamingSurfaces = ["power", "nvidia", "pubg", "benchmarks"];
+  const missingGamingSurfaces = requiredGamingSurfaces.filter((surface) => !gaming?.[surface]);
+
+  if (missingGamingSurfaces.length > 0) {
+    throw new Error(`Gaming surfaces missing: ${missingGamingSurfaces.join(", ")}`);
+  }
+
+  const requiredPowerPlans = [
+    "power.plan.liiiraa-balanced",
+    "power.plan.liiiraa-performance",
+    "power.plan.liiiraa-competitive"
+  ];
+  const powerPlans = new Set(gaming.power.plans.map((plan) => plan.id));
+  const missingPowerPlans = requiredPowerPlans.filter((plan) => !powerPlans.has(plan));
+
+  if (missingPowerPlans.length > 0) {
+    throw new Error(`Power plans missing: ${missingPowerPlans.join(", ")}`);
+  }
+
+  const requiredNvidiaProfiles = ["nvidia.global.profile", "nvidia.pubg.profile"];
+  const nvidiaProfiles = new Set(gaming.nvidia.profiles.map((profile) => profile.id));
+  const missingNvidiaProfiles = requiredNvidiaProfiles.filter((profile) => !nvidiaProfiles.has(profile));
+
+  if (missingNvidiaProfiles.length > 0) {
+    throw new Error(`NVIDIA profiles missing: ${missingNvidiaProfiles.join(", ")}`);
+  }
+
+  const hasBattleyePolicy = gaming.nvidia.policies.some((policy) => /BattlEye|running/i.test(policy.detail));
+  if (!hasBattleyePolicy) {
+    throw new Error("NVIDIA surface must disclose BattlEye/PUBG running deferral.");
+  }
+
+  const hasPubgBoundary = gaming.pubg.detections.some((item) => /BattlEye|memory|binaries/i.test(item.detail));
+  if (!hasPubgBoundary) {
+    throw new Error("PUBG surface must show anti-cheat boundaries.");
+  }
+
+  if (gaming.benchmarks.chart.length < 2 || gaming.benchmarks.metadata.length === 0) {
+    throw new Error("Benchmark surface must include comparison data and metadata.");
+  }
 }
 
 export function renderOptimizationWorkflowSmokeHtml(workflow = optimizationWorkflow) {
@@ -582,6 +1135,47 @@ export function renderOptimizationWorkflowSmokeHtml(workflow = optimizationWorkf
         )
         .join("")}
     </section>`;
+
+  const renderStatusRows = (items) =>
+    items
+      .map(
+        (item) => `
+        <div class="row" data-tone="${item.tone}">
+          <b>${item.label}</b>
+          <span>${item.value}</span>
+          <span>${item.detail}</span>
+          <span>${item.id}</span>
+        </div>`
+      )
+      .join("");
+
+  const renderPowerPlan = (plan) => `
+    <div class="row" data-tone="${plan.tone}">
+      <b>${plan.label}</b>
+      <span>${plan.mode}</span>
+      <span>${plan.state}</span>
+      <span>${plan.rollback}</span>
+    </div>`;
+
+  const renderProfile = (profile) => `
+    <div class="row" data-tone="${profile.tone}">
+      <b>${profile.label}</b>
+      <span>${profile.scope}</span>
+      <span>${profile.state}</span>
+      <span>${profile.rollback}</span>
+    </div>`;
+
+  const renderBenchmarkBar = (point) => {
+    const width = Math.max(14, Math.min(100, Math.round((point.onePercentLow / 160) * 100)));
+
+    return `
+      <div class="bar-row" data-tone="${point.tone}">
+        <b>${point.label}</b>
+        <span class="bar-track"><span class="bar-fill" style="width: ${width}%"></span></span>
+        <span>${point.onePercentLow} FPS 1% low</span>
+        <span>p95 ${point.p95FrameMs} ms</span>
+      </div>`;
+  };
 
   return `<!doctype html>
   <html lang="en">
@@ -640,10 +1234,31 @@ export function renderOptimizationWorkflowSmokeHtml(workflow = optimizationWorkf
           padding: 10px 0;
           border-top: 1px solid #2a3541;
         }
+        .bar-row {
+          display: grid;
+          grid-template-columns: minmax(140px, 0.8fr) minmax(180px, 1.4fr) repeat(2, minmax(110px, 0.8fr));
+          gap: 10px;
+          align-items: center;
+          padding: 10px 0;
+          border-top: 1px solid #2a3541;
+        }
+        .bar-track {
+          display: block;
+          height: 12px;
+          overflow: hidden;
+          border: 1px solid #344252;
+          border-radius: 999px;
+          background: #202b37;
+        }
+        .bar-fill {
+          display: block;
+          height: 100%;
+          background: var(--tone, #27d7ff);
+        }
         .row:first-of-type { border-top: 0; }
         @media (max-width: 900px) {
           .grid, .views { grid-template-columns: 1fr 1fr; }
-          .row { grid-template-columns: 1fr; }
+          .row, .bar-row { grid-template-columns: 1fr; }
         }
         @media (max-width: 640px) {
           main { padding: 14px; }
@@ -657,7 +1272,7 @@ export function renderOptimizationWorkflowSmokeHtml(workflow = optimizationWorkf
         <header>
           <div>
             <p>Optimization workflow</p>
-            <h1>Dashboard, scan, optimize, rollback</h1>
+            <h1>Dashboard, scan, optimize, rollback, gaming surfaces</h1>
           </div>
           <div class="actions">
             ${workflow.optimize.actions
@@ -687,6 +1302,28 @@ export function renderOptimizationWorkflowSmokeHtml(workflow = optimizationWorkf
           </section>
           ${workflow.optimize.groups.map(renderPlan).join("")}
           ${workflow.rollback.sessions.map(renderRollback).join("")}
+          <section class="panel">
+            <h2>Power</h2>
+            ${workflow.gaming.power.plans.map(renderPowerPlan).join("")}
+            ${renderStatusRows(workflow.gaming.power.rules)}
+          </section>
+          <section class="panel">
+            <h2>NVIDIA</h2>
+            ${workflow.gaming.nvidia.profiles.map(renderProfile).join("")}
+            ${renderStatusRows(workflow.gaming.nvidia.policies)}
+          </section>
+          <section class="panel">
+            <h2>PUBG</h2>
+            ${renderStatusRows(workflow.gaming.pubg.detections)}
+            ${renderStatusRows(workflow.gaming.pubg.checklist)}
+          </section>
+          <section class="panel">
+            <h2>Benchmarks</h2>
+            ${workflow.gaming.benchmarks.chart.map(renderBenchmarkBar).join("")}
+            ${workflow.gaming.benchmarks.sessions
+              .map((session) => `<div class="row" data-tone="${session.tone}"><b>${session.label}</b><span>${session.value}</span><span>${session.detail}</span><span>${session.id}</span></div>`)
+              .join("")}
+          </section>
         </section>
       </main>
     </body>

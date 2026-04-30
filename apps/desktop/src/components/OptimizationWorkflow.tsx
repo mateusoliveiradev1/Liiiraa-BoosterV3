@@ -94,6 +94,45 @@ type RollbackSession = {
   items: RollbackItem[];
 };
 
+type PowerPlan = {
+  id: string;
+  label: string;
+  mode: string;
+  state: string;
+  detail: string;
+  rollback: string;
+  defaults: string;
+  tone: WorkflowTone;
+};
+
+type NvidiaProfile = {
+  id: string;
+  label: string;
+  scope: string;
+  state: string;
+  recommendation: string;
+  rollback: string;
+  tone: WorkflowTone;
+};
+
+type PubgDxChoice = {
+  id: string;
+  label: string;
+  evidence: string;
+  rollback: string;
+  state: string;
+  tone: WorkflowTone;
+};
+
+type BenchmarkPoint = {
+  id: string;
+  label: string;
+  averageFps: number;
+  onePercentLow: number;
+  p95FrameMs: number;
+  tone: WorkflowTone;
+};
+
 type DashboardData = {
   readinessScore: number;
   activeMode: string;
@@ -129,6 +168,37 @@ type RollbackData = {
   sessions: RollbackSession[];
 };
 
+type PowerData = {
+  metrics: DashboardMetric[];
+  actions: PlanAction[];
+  plans: PowerPlan[];
+  rules: ReadinessSignal[];
+};
+
+type NvidiaData = {
+  metrics: DashboardMetric[];
+  actions: PlanAction[];
+  profiles: NvidiaProfile[];
+  policies: ReadinessSignal[];
+  capLogic: Array<[string, string]>;
+};
+
+type PubgData = {
+  metrics: DashboardMetric[];
+  actions: PlanAction[];
+  detections: ReadinessSignal[];
+  dxChoices: PubgDxChoice[];
+  checklist: ReadinessSignal[];
+};
+
+type BenchmarkData = {
+  metrics: DashboardMetric[];
+  actions: PlanAction[];
+  chart: BenchmarkPoint[];
+  metadata: Array<[string, string]>;
+  sessions: ReadinessSignal[];
+};
+
 type DashboardViewProps = {
   data: DashboardData;
   actions?: ReactNode;
@@ -145,6 +215,22 @@ type OptimizeViewProps = {
 
 type RollbackViewProps = {
   data: RollbackData;
+};
+
+type PowerViewProps = {
+  data: PowerData;
+};
+
+type NvidiaViewProps = {
+  data: NvidiaData;
+};
+
+type PubgViewProps = {
+  data: PubgData;
+};
+
+type BenchmarkViewProps = {
+  data: BenchmarkData;
 };
 
 const toneAccent: Record<WorkflowTone, string> = {
@@ -290,12 +376,105 @@ export function RollbackWorkflowView({ data }: RollbackViewProps) {
   );
 }
 
+export function PowerWorkflowView({ data }: PowerViewProps) {
+  return (
+    <div style={viewGridStyle} aria-label="Power plan workflow">
+      <WorkflowHeader
+        eyebrow="Power"
+        title="Liiiraa power plan control"
+        actions={<PlanActionBar actions={data.actions} />}
+      />
+      <MetricGrid metrics={data.metrics} />
+      <div style={twoColumnStyle}>
+        <Surface title="Plan ladder" eyebrow="Scoped Windows power changes">
+          <PowerPlanTable plans={data.plans} />
+        </Surface>
+        <Surface title="Desktop and laptop policy" eyebrow="Default safety model">
+          <SignalList items={data.rules} />
+        </Surface>
+      </div>
+    </div>
+  );
+}
+
+export function NvidiaWorkflowView({ data }: NvidiaViewProps) {
+  return (
+    <div style={viewGridStyle} aria-label="NVIDIA profile workflow">
+      <WorkflowHeader
+        eyebrow="NVIDIA"
+        title="Profile safety and PUBG readiness"
+        actions={<PlanActionBar actions={data.actions} />}
+      />
+      <MetricGrid metrics={data.metrics} />
+      <div style={twoColumnStyle}>
+        <Surface title="Profile states" eyebrow="Backup before mutation">
+          <NvidiaProfileTable profiles={data.profiles} />
+        </Surface>
+        <Surface title="Refresh and cap logic" eyebrow="VRR-aware profile policy">
+          <DefinitionGrid items={data.capLogic} />
+        </Surface>
+      </div>
+      <Surface title="Safety policy" eyebrow="Driver settings guardrails">
+        <SignalList items={data.policies} />
+      </Surface>
+    </div>
+  );
+}
+
+export function PubgWorkflowView({ data }: PubgViewProps) {
+  return (
+    <div style={viewGridStyle} aria-label="PUBG optimization workflow">
+      <WorkflowHeader
+        eyebrow="PUBG"
+        title="Competitive checklist and anti-cheat boundary"
+        actions={<PlanActionBar actions={data.actions} />}
+      />
+      <MetricGrid metrics={data.metrics} />
+      <div style={twoColumnStyle}>
+        <Surface title="Detection" eyebrow="Read-only install and config state">
+          <SignalList items={data.detections} />
+        </Surface>
+        <Surface title="Competitive checklist" eyebrow="Automatic vs manual recommendations">
+          <SignalList items={data.checklist} />
+        </Surface>
+      </div>
+      <Surface title="DirectX benchmark choice" eyebrow="No universal forced mode">
+        <PubgDxTable choices={data.dxChoices} />
+      </Surface>
+    </div>
+  );
+}
+
+export function BenchmarkWorkflowView({ data }: BenchmarkViewProps) {
+  return (
+    <div style={viewGridStyle} aria-label="Benchmark comparison workflow">
+      <WorkflowHeader
+        eyebrow="Benchmarks"
+        title="Before and after proof"
+        actions={<PlanActionBar actions={data.actions} />}
+      />
+      <MetricGrid metrics={data.metrics} />
+      <div style={twoColumnStyle}>
+        <Surface title="1% low comparison" eyebrow="Native frames only">
+          <BenchmarkChart points={data.chart} />
+        </Surface>
+        <Surface title="Run metadata" eyebrow="Required comparison context">
+          <DefinitionGrid items={data.metadata} />
+        </Surface>
+      </div>
+      <Surface title="Capture state" eyebrow="Variance-aware reporting">
+        <SignalList items={data.sessions} />
+      </Surface>
+    </div>
+  );
+}
+
 export function PlanActionBar({ actions }: { actions: PlanAction[] }) {
   return (
     <div className="action-bar" aria-label="Optimization plan actions">
       {actions.map((action) => (
         <button
-          className={action.variant === "primary" ? "button button--primary" : "button button--ghost"}
+          className={`button button--${action.variant === "secondary" ? "secondary" : action.variant}`}
           key={action.id}
           title={action.label}
           type="button"
@@ -382,6 +561,22 @@ function StatusRow({
   );
 }
 
+function SignalList({ items }: { items: ReadinessSignal[] }) {
+  return (
+    <div style={compactRowStyle}>
+      {items.map((item) => (
+        <StatusRow
+          key={item.id}
+          label={item.label}
+          value={item.value}
+          detail={item.detail}
+          tone={item.tone}
+        />
+      ))}
+    </div>
+  );
+}
+
 function DefinitionGrid({ items }: { items: Array<[string, string]> }) {
   return (
     <dl style={definitionGridStyle}>
@@ -392,6 +587,107 @@ function DefinitionGrid({ items }: { items: Array<[string, string]> }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+function PowerPlanTable({ plans }: { plans: PowerPlan[] }) {
+  return (
+    <div className="bucket-table" role="table" aria-label="Power plan ladder">
+      <div className="bucket-row bucket-row--head" role="row">
+        <span role="columnheader">Plan</span>
+        <span role="columnheader">Mode</span>
+        <span role="columnheader">State</span>
+        <span role="columnheader">Rollback</span>
+      </div>
+      {plans.map((plan) => (
+        <div className="bucket-row" data-tone={plan.tone} role="row" key={plan.id}>
+          <span role="cell">
+            <strong>{plan.label}</strong>
+            <small>{plan.detail}</small>
+          </span>
+          <span role="cell">
+            {plan.mode}
+            <small>Default: {plan.defaults}</small>
+          </span>
+          <span role="cell">{plan.state}</span>
+          <span role="cell">{plan.rollback}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NvidiaProfileTable({ profiles }: { profiles: NvidiaProfile[] }) {
+  return (
+    <div className="bucket-table" role="table" aria-label="NVIDIA profile states">
+      <div className="bucket-row bucket-row--head" role="row">
+        <span role="columnheader">Profile</span>
+        <span role="columnheader">Scope</span>
+        <span role="columnheader">State</span>
+        <span role="columnheader">Rollback</span>
+      </div>
+      {profiles.map((profile) => (
+        <div className="bucket-row" data-tone={profile.tone} role="row" key={profile.id}>
+          <span role="cell">
+            <strong>{profile.label}</strong>
+            <small>{profile.recommendation}</small>
+          </span>
+          <span role="cell">{profile.scope}</span>
+          <span role="cell">{profile.state}</span>
+          <span role="cell">{profile.rollback}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PubgDxTable({ choices }: { choices: PubgDxChoice[] }) {
+  return (
+    <div className="bucket-table" role="table" aria-label="PUBG DirectX benchmark choices">
+      <div className="bucket-row bucket-row--head" role="row">
+        <span role="columnheader">Mode</span>
+        <span role="columnheader">Evidence</span>
+        <span role="columnheader">State</span>
+        <span role="columnheader">Rollback</span>
+      </div>
+      {choices.map((choice) => (
+        <div className="bucket-row" data-tone={choice.tone} role="row" key={choice.id}>
+          <span role="cell">
+            <strong>{choice.label}</strong>
+          </span>
+          <span role="cell">{choice.evidence}</span>
+          <span role="cell">{choice.state}</span>
+          <span role="cell">{choice.rollback}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BenchmarkChart({ points }: { points: BenchmarkPoint[] }) {
+  const maxLow = Math.max(...points.map((point) => point.onePercentLow), 1);
+
+  return (
+    <div className="benchmark-chart" role="img" aria-label="Benchmark 1 percent low FPS comparison">
+      {points.map((point) => {
+        const width = `${Math.max(12, Math.round((point.onePercentLow / maxLow) * 100))}%`;
+
+        return (
+          <div className="benchmark-row" data-tone={point.tone} key={point.id}>
+            <div>
+              <strong>{point.label}</strong>
+              <span>
+                {point.averageFps} avg FPS - p95 {point.p95FrameMs} ms
+              </span>
+            </div>
+            <span className="benchmark-row__track" aria-hidden="true">
+              <span className="benchmark-row__fill" style={{ width }} />
+            </span>
+            <strong>{point.onePercentLow} FPS 1% low</strong>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
