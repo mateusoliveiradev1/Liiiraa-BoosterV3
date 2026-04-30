@@ -1,6 +1,7 @@
 //! Pure tweak planning, policy, validation, and risk modeling.
 
 pub mod ipc;
+pub mod protected_storage;
 
 /// Static metadata describing this workspace crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
