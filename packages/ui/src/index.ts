@@ -6,6 +6,11 @@ export {
   renderOptimizationWorkflowSmokeHtml
 } from "./optimizationWorkflow.js";
 export {
+  assertSettingsTrustSmoke,
+  renderSettingsTrustSmokeHtml,
+  settingsTrust
+} from "./settingsTrust.js";
+export {
   assertPrimitiveA11ySmoke,
   createButtonPrimitive,
   createIconButtonPrimitive,
@@ -47,6 +52,18 @@ export type {
   ToolbarPrimitiveOptions,
   TooltipPrimitive
 } from "./primitives";
+export type {
+  SettingsTrustActionVariant,
+  SettingsTrustAuditEvent,
+  SettingsTrustChannel,
+  SettingsTrustChainItem,
+  SettingsTrustData,
+  SettingsTrustGate,
+  SettingsTrustLocalDataAction,
+  SettingsTrustMetric,
+  SettingsTrustToggle,
+  SettingsTrustTone
+} from "./settingsTrust.js";
 export type {
   LiiiraaColorTokenGroup,
   LiiiraaComponentTokenGroup,
