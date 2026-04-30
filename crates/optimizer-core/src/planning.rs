@@ -10,7 +10,7 @@ use crate::{
     tweak_contracts::{
         BackupRequirement, PlanAction, PlanId, PlannedChange, RebootPolicy, RollbackKind,
         RollbackPlan, RollbackStep, SessionScope, TweakDefinition, TweakId, TweakMode,
-        TweakPlan, TweakPlanItem,
+        TweakOperationKind, TweakPlan, TweakPlanItem,
     },
 };
 
@@ -515,6 +515,10 @@ fn planned_changes(definition: &TweakDefinition, action: PlanAction) -> Vec<Plan
         return Vec::new();
     }
 
+    if action == PlanAction::Deny {
+        return denied_changes(definition);
+    }
+
     definition
         .apply
         .operations
@@ -525,6 +529,31 @@ fn planned_changes(definition: &TweakDefinition, action: PlanAction) -> Vec<Plan
             previous_value: None,
             desired_value: operation.value.clone(),
             scope: definition.session_scope,
+        })
+        .collect()
+}
+
+fn denied_changes(definition: &TweakDefinition) -> Vec<PlannedChange> {
+    if definition.apply.operations.is_empty() {
+        return vec![PlannedChange {
+            target: definition.id.clone(),
+            operation: TweakOperationKind::Deny,
+            previous_value: None,
+            desired_value: None,
+            scope: SessionScope::Blocked,
+        }];
+    }
+
+    definition
+        .apply
+        .operations
+        .iter()
+        .map(|operation| PlannedChange {
+            target: operation.target.clone(),
+            operation: TweakOperationKind::Deny,
+            previous_value: None,
+            desired_value: None,
+            scope: SessionScope::Blocked,
         })
         .collect()
 }
@@ -788,9 +817,63 @@ mod tests {
         let plan = build_dry_run_plan(&registry, &request).expect("plan should build");
 
         assert_eq!(plan.items[0].action, PlanAction::Deny);
+        assert_eq!(plan.items[0].changes[0].operation, TweakOperationKind::Deny);
+        assert_eq!(plan.items[0].changes[0].scope, SessionScope::Blocked);
         assert_eq!(plan.items[1].action, PlanAction::Recommend);
         assert!(plan.has_denials());
         assert!(!plan.has_apply_items());
+    }
+
+    #[test]
+    fn safe_plan_excludes_competitive_and_lab_modes_from_apply() {
+        let safe = base_definition("game.capture.background.off");
+
+        let mut competitive = base_definition("nvidia.low-latency.on");
+        competitive.mode = TweakMode::Competitive;
+        competitive.default_enabled = true;
+
+        let mut lab = base_definition("nvidia.rebar.hidden-override");
+        lab.mode = TweakMode::Lab;
+        lab.default_enabled = true;
+
+        let registry = registry(vec![safe, competitive, lab]);
+        let request = DryRunPlanRequest::all("plan-safe", TweakMode::Safe);
+
+        let plan = build_dry_run_plan(&registry, &request).expect("plan should build");
+
+        assert_eq!(plan.items[0].action, PlanAction::Apply);
+        assert_eq!(plan.items[1].action, PlanAction::Recommend);
+        assert_eq!(plan.items[2].action, PlanAction::Recommend);
+        assert!(plan.items[1]
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("requires explicit opt-in")));
+        assert!(plan.items[2]
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("requires explicit opt-in")));
+    }
+
+    #[test]
+    fn blocked_guardrail_without_apply_operations_still_has_denial_target() {
+        let mut blocked = base_definition("blocked.bulk-reg-pack");
+        blocked.mode = TweakMode::Blocked;
+        blocked.session_scope = SessionScope::Blocked;
+        blocked.apply.operations.clear();
+        blocked.apply.mutates_system = false;
+        blocked.default_enabled = false;
+
+        let registry = registry(vec![blocked]);
+        let request = DryRunPlanRequest::all("plan-safe", TweakMode::Safe);
+
+        let plan = build_dry_run_plan(&registry, &request).expect("plan should build");
+        let item = &plan.items[0];
+
+        assert_eq!(item.action, PlanAction::Deny);
+        assert_eq!(item.changes.len(), 1);
+        assert_eq!(item.changes[0].target, "blocked.bulk-reg-pack");
+        assert_eq!(item.changes[0].operation, TweakOperationKind::Deny);
+        assert_eq!(item.changes[0].scope, SessionScope::Blocked);
     }
 
     #[test]
