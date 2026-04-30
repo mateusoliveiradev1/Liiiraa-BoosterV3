@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Default-deny capability for the main Liiiraa Booster window. It intentionally grants no filesystem, shell, process, dialog, HTTP, clipboard, notification, updater, OS, plugin, or custom command permissions until a later task adds a narrowly scoped permission.",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "local": true,
+  "permissions": []
+}
