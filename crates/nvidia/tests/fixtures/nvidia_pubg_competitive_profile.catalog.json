@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1",
+  "tweak": {
+    "id": "nvidia.pubg.profile",
+    "mode": "competitive",
+    "category": "nvidia",
+    "name": "Liiiraa Boost - PUBG Competitive",
+    "profileName": "Liiiraa Boost - PUBG Competitive",
+    "scope": "application",
+    "applications": [
+      "TslGame.exe"
+    ],
+    "default": "prompt",
+    "requiresBackup": true,
+    "verify": "readback",
+    "rollback": "restore-profile-export",
+    "gameClosedRequired": true,
+    "settings": [
+      {
+        "id": "max-frame-rate",
+        "name": "Max Frame Rate",
+        "value": "VRR refresh minus 3 FPS when G-SYNC/VRR is confirmed, otherwise Off",
+        "visibility": "user-visible",
+        "reason": "Profile-specific caps avoid global FPS limits and keep VRR inside its range."
+      },
+      {
+        "id": "low-latency-mode",
+        "name": "Low Latency Mode",
+        "value": "Off when PUBG Reflex is available, On for non-Reflex DX11 paths",
+        "visibility": "user-visible",
+        "reason": "Prefer in-game NVIDIA Reflex and avoid driver Ultra as a default."
+      },
+      {
+        "id": "monitor-technology",
+        "name": "Monitor Technology",
+        "value": "G-SYNC Compatible when VRR is confirmed, otherwise Use global setting",
+        "visibility": "user-visible",
+        "reason": "G-SYNC/VRR policy must be tied to display detection."
+      },
+      {
+        "id": "power-management-mode",
+        "name": "Power management mode",
+        "value": "Prefer maximum performance",
+        "visibility": "user-visible",
+        "reason": "Competitive per-game profile may trade power and heat for stable clocks."
+      },
+      {
+        "id": "preferred-refresh-rate",
+        "name": "Preferred refresh rate",
+        "value": "Highest available",
+        "visibility": "user-visible",
+        "reason": "PUBG should use the detected high-refresh display mode."
+      },
+      {
+        "id": "shader-cache",
+        "name": "Shader Cache",
+        "value": "On",
+        "visibility": "documented",
+        "reason": "Keep shader caching enabled and do not clear it as a default."
+      },
+      {
+        "id": "texture-filtering-quality",
+        "name": "Texture filtering - Quality",
+        "value": "High performance",
+        "visibility": "user-visible",
+        "reason": "Competitive profile accepts visual tradeoff with explicit user opt-in."
+      },
+      {
+        "id": "vertical-sync",
+        "name": "Vertical sync",
+        "value": "On for confirmed G-SYNC/VRR policy, otherwise Use the 3D application setting",
+        "visibility": "user-visible",
+        "reason": "VRR policy pairs NVIDIA V-SYNC with a below-refresh cap; non-VRR paths stay application-controlled."
+      }
+    ],
+    "policies": {
+      "reflex": "Prefer PUBG in-game NVIDIA Reflex + Boost; never stack driver Ultra Low Latency by default.",
+      "gsyncVrr": "Use a profile-specific cap below refresh when G-SYNC/VRR is confirmed.",
+      "rebar": "Resizable BAR is detect/recommend only; hidden per-game override bits are Lab-only and benchmark-gated."
+    },
+    "blockedDefaults": [
+      "Low Latency Mode Ultra",
+      "global FPS caps",
+      "hidden ReBAR overrides",
+      "bulk NPI imports",
+      "BattlEye or PUBG file/process/memory mutation"
+    ]
+  }
+}

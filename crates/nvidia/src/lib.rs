@@ -1,6 +1,7 @@
 //! NVIDIA profile backup, planning, apply, and verification.
 
 use gpu::{GpuCapabilityState, GpuInventory, GpuVendor, GpuVendorDetection};
+use pubg::{PubgRuntimeState, PUBG_EXECUTABLE_NAME};
 use std::{collections::BTreeSet, fmt};
 
 /// Tweak ID for the required NVIDIA profile backup action.
@@ -9,9 +10,16 @@ pub const NVIDIA_PROFILE_BACKUP_TWEAK_ID: &str = "nvidia.backup.profiles";
 /// Tweak ID for the conservative global NVIDIA performance profile.
 pub const NVIDIA_GLOBAL_PROFILE_TWEAK_ID: &str = "nvidia.global.profile";
 
+/// Tweak ID for the PUBG competitive NVIDIA application profile.
+pub const NVIDIA_PUBG_PROFILE_TWEAK_ID: &str = "nvidia.pubg.profile";
+
 /// Driver profile name owned by Liiiraa for conservative global performance defaults.
 pub const LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME: &str =
     "Liiiraa Boost - Global Performance";
+
+/// Driver profile name owned by Liiiraa for PUBG competitive settings.
+pub const LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME: &str =
+    "Liiiraa Boost - PUBG Competitive";
 
 const APPROVED_GLOBAL_PROFILE_SETTINGS: &[(
     &str,
@@ -63,6 +71,17 @@ const APPROVED_GLOBAL_PROFILE_SETTINGS: &[(
     ),
 ];
 
+const REQUIRED_PUBG_COMPETITIVE_SETTING_IDS: &[&str] = &[
+    "max-frame-rate",
+    "low-latency-mode",
+    "monitor-technology",
+    "power-management-mode",
+    "preferred-refresh-rate",
+    "shader-cache",
+    "texture-filtering-quality",
+    "vertical-sync",
+];
+
 /// Read-only NVIDIA GPU, driver, and profile-tool detection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NvidiaDriverDetection {
@@ -103,6 +122,192 @@ impl NvidiaDriverDetection {
     pub fn has_driver_version(&self) -> bool {
         matches!(self.vendor.driver_state(), GpuCapabilityState::Ready)
     }
+}
+
+/// Reflex and driver Low Latency Mode decision for PUBG.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NvidiaPubgReflexPolicy {
+    /// Prefer PUBG's in-game NVIDIA Reflex path and keep driver Low Latency Mode off.
+    PreferInGameReflex,
+    /// Use driver Low Latency Mode On when Reflex support cannot be confirmed.
+    DriverLowLatencyOn,
+}
+
+impl NvidiaPubgReflexPolicy {
+    /// Returns the planned driver Low Latency Mode value.
+    #[must_use]
+    pub const fn driver_low_latency_value(self) -> &'static str {
+        match self {
+            Self::PreferInGameReflex => "Off",
+            Self::DriverLowLatencyOn => "On",
+        }
+    }
+
+    /// Returns a user-visible policy note.
+    #[must_use]
+    pub const fn note(self) -> &'static str {
+        match self {
+            Self::PreferInGameReflex => {
+                "Prefer PUBG in-game NVIDIA Reflex + Boost; keep driver Low Latency Mode Off to avoid stacking latency controls."
+            }
+            Self::DriverLowLatencyOn => {
+                "Use driver Low Latency Mode On for the non-Reflex path; Ultra remains blocked as a default."
+            }
+        }
+    }
+}
+
+/// G-SYNC/VRR and FPS cap policy for the PUBG profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NvidiaPubgVrrPolicy {
+    /// VRR is enabled and the driver profile owns an FPS cap below refresh rate.
+    VrrCap {
+        /// Active display refresh rate.
+        refresh_rate_hz: u16,
+        /// Recommended cap below refresh rate.
+        cap_fps: u16,
+    },
+    /// VRR is unavailable or unknown, so sync and cap stay application-controlled.
+    ApplicationControlled,
+}
+
+impl NvidiaPubgVrrPolicy {
+    /// Returns the planned Max Frame Rate setting.
+    #[must_use]
+    pub fn max_frame_rate_value(self) -> String {
+        match self {
+            Self::VrrCap { cap_fps, .. } => format!("{cap_fps} FPS"),
+            Self::ApplicationControlled => "Off".to_owned(),
+        }
+    }
+
+    /// Returns the planned monitor technology setting.
+    #[must_use]
+    pub const fn monitor_technology_value(self) -> &'static str {
+        match self {
+            Self::VrrCap { .. } => "G-SYNC Compatible",
+            Self::ApplicationControlled => "Use global setting",
+        }
+    }
+
+    /// Returns the planned Vertical sync setting.
+    #[must_use]
+    pub const fn vertical_sync_value(self) -> &'static str {
+        match self {
+            Self::VrrCap { .. } => "On",
+            Self::ApplicationControlled => "Use the 3D application setting",
+        }
+    }
+
+    /// Returns a user-visible policy note.
+    #[must_use]
+    pub fn note(self) -> String {
+        match self {
+            Self::VrrCap {
+                refresh_rate_hz,
+                cap_fps,
+            } => format!(
+                "Use G-SYNC/VRR with NVIDIA V-SYNC On and cap PUBG to {cap_fps} FPS below {refresh_rate_hz} Hz."
+            ),
+            Self::ApplicationControlled => {
+                "Keep FPS cap and sync application-controlled until VRR support and refresh rate are confirmed."
+                    .to_owned()
+            }
+        }
+    }
+}
+
+/// Resizable BAR policy for the PUBG profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NvidiaPubgRebarPolicy {
+    /// ReBAR is detected; keep NVIDIA's official per-title driver policy.
+    OfficialDriverPolicy,
+    /// ReBAR appears disabled or unknown; recommend official BIOS/VBIOS/driver checks only.
+    RecommendOfficialEnablement,
+    /// ReBAR does not apply to this system.
+    NotApplicable,
+}
+
+impl NvidiaPubgRebarPolicy {
+    /// Builds a ReBAR policy from read-only capability state.
+    #[must_use]
+    pub const fn from_capability(state: GpuCapabilityState) -> Self {
+        match state {
+            GpuCapabilityState::Ready => Self::OfficialDriverPolicy,
+            GpuCapabilityState::Missing | GpuCapabilityState::Unknown => {
+                Self::RecommendOfficialEnablement
+            }
+            GpuCapabilityState::NotApplicable => Self::NotApplicable,
+        }
+    }
+
+    /// Returns a user-visible policy note.
+    #[must_use]
+    pub const fn note(self) -> &'static str {
+        match self {
+            Self::OfficialDriverPolicy => {
+                "Resizable BAR is detected; keep NVIDIA's official per-title policy and avoid hidden override bits."
+            }
+            Self::RecommendOfficialEnablement => {
+                "Resizable BAR is not confirmed; recommend official BIOS/VBIOS/driver checks, not firmware flashing or hidden overrides."
+            }
+            Self::NotApplicable => {
+                "Resizable BAR does not apply to this machine, so no ReBAR setting is written."
+            }
+        }
+    }
+}
+
+/// Inputs used to build the PUBG competitive NVIDIA profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NvidiaPubgCompetitiveProfileRequest {
+    /// Primary display refresh rate when known.
+    pub display_refresh_hz: Option<u16>,
+    /// Whether G-SYNC/VRR is currently enabled for the target display path.
+    pub vrr_enabled: bool,
+    /// Whether PUBG's in-game NVIDIA Reflex path is supported and should be preferred.
+    pub pubg_reflex_supported: bool,
+    /// Read-only Resizable BAR state from GPU/platform detection.
+    pub rebar_state: GpuCapabilityState,
+    /// PUBG/BattlEye runtime state used to defer profile mutation.
+    pub runtime_state: PubgRuntimeState,
+}
+
+impl NvidiaPubgCompetitiveProfileRequest {
+    /// Creates a PUBG competitive NVIDIA profile request.
+    #[must_use]
+    pub fn new(
+        display_refresh_hz: Option<u16>,
+        vrr_enabled: bool,
+        pubg_reflex_supported: bool,
+        rebar_state: GpuCapabilityState,
+        runtime_state: PubgRuntimeState,
+    ) -> Self {
+        Self {
+            display_refresh_hz,
+            vrr_enabled,
+            pubg_reflex_supported,
+            rebar_state,
+            runtime_state,
+        }
+    }
+}
+
+/// Dry-run plan for the PUBG competitive NVIDIA profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NvidiaPubgCompetitiveProfilePlan {
+    /// Driver application profile to create or update.
+    pub profile: NvidiaProfile,
+    /// FPS cap chosen for VRR, when applicable.
+    pub fps_cap: Option<u16>,
+    /// Reflex and driver Low Latency Mode policy.
+    pub reflex_policy: NvidiaPubgReflexPolicy,
+    /// G-SYNC/VRR and sync policy.
+    pub vrr_policy: NvidiaPubgVrrPolicy,
+    /// Resizable BAR policy.
+    pub rebar_policy: NvidiaPubgRebarPolicy,
+    /// Manual actions or explanations shown alongside the profile.
+    pub manual_actions: Vec<String>,
 }
 
 /// Backing integration used to read NVIDIA driver profiles.
@@ -390,10 +595,27 @@ pub enum NvidiaProfileError {
         /// Validation failure reason.
         reason: String,
     },
+    /// A requested PUBG profile setting violates competitive profile policy.
+    UnsafePubgProfileSetting {
+        /// Setting ID that failed validation.
+        setting_id: String,
+        /// Validation failure reason.
+        reason: String,
+    },
     /// The expected Liiiraa global profile was not visible during readback.
     GlobalProfileReadbackMissing {
         /// Expected global profile name.
         profile: String,
+    },
+    /// The expected Liiiraa PUBG profile was not visible during readback.
+    PubgProfileReadbackMissing {
+        /// Expected application profile name.
+        profile: String,
+    },
+    /// PUBG or BattlEye is running, so profile mutation must be deferred.
+    PubgOrBattleyeRunning {
+        /// Blocking process names.
+        processes: Vec<String>,
     },
     /// The backup request filtered out all readback profiles.
     NoProfilesSelected,
@@ -424,10 +646,29 @@ impl fmt::Display for NvidiaProfileError {
                     "unsafe global NVIDIA profile setting {setting_id:?}: {reason}"
                 )
             }
+            Self::UnsafePubgProfileSetting { setting_id, reason } => {
+                write!(
+                    formatter,
+                    "unsafe PUBG NVIDIA profile setting {setting_id:?}: {reason}"
+                )
+            }
             Self::GlobalProfileReadbackMissing { profile } => {
                 write!(
                     formatter,
                     "global NVIDIA profile {profile:?} was not found during readback"
+                )
+            }
+            Self::PubgProfileReadbackMissing { profile } => {
+                write!(
+                    formatter,
+                    "PUBG NVIDIA profile {profile:?} was not found during readback"
+                )
+            }
+            Self::PubgOrBattleyeRunning { processes } => {
+                write!(
+                    formatter,
+                    "PUBG or BattlEye is running; defer NVIDIA profile mutation until these processes close: {}",
+                    processes.join(", ")
                 )
             }
             Self::NoProfilesSelected => {
@@ -455,6 +696,12 @@ pub trait NvidiaProfileWriteBridge: NvidiaProfileBridge {
         &mut self,
         profile: NvidiaProfile,
     ) -> Result<(), NvidiaProfileError>;
+
+    /// Writes or replaces an application NVIDIA profile.
+    fn write_application_profile(
+        &mut self,
+        profile: NvidiaProfile,
+    ) -> Result<(), NvidiaProfileError>;
 }
 
 /// Result of applying and verifying the conservative Liiiraa global profile.
@@ -464,6 +711,19 @@ pub struct NvidiaGlobalProfileApplyResult {
     pub tweak_id: &'static str,
     /// Profile requested for application.
     pub requested_profile: NvidiaProfile,
+    /// Rollback backup captured before mutation.
+    pub backup: NvidiaProfileBackup,
+    /// Profile as observed through post-apply readback.
+    pub verified_profile: NvidiaProfile,
+}
+
+/// Result of applying and verifying the PUBG competitive NVIDIA profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NvidiaPubgProfileApplyResult {
+    /// Tweak ID that produced this profile mutation.
+    pub tweak_id: &'static str,
+    /// Profile plan requested for application.
+    pub requested_plan: NvidiaPubgCompetitiveProfilePlan,
     /// Rollback backup captured before mutation.
     pub backup: NvidiaProfileBackup,
     /// Profile as observed through post-apply readback.
@@ -538,6 +798,127 @@ pub fn global_performance_profile() -> NvidiaProfile {
     )
 }
 
+/// Returns the recommended VRR cap below refresh rate for competitive latency.
+#[must_use]
+pub const fn recommended_vrr_frame_cap(refresh_rate_hz: u16) -> u16 {
+    if refresh_rate_hz >= 100 {
+        refresh_rate_hz - 3
+    } else if refresh_rate_hz > 2 {
+        refresh_rate_hz - 2
+    } else {
+        1
+    }
+}
+
+/// Builds a dry-run PUBG competitive NVIDIA profile plan.
+pub fn plan_pubg_competitive_profile(
+    request: &NvidiaPubgCompetitiveProfileRequest,
+) -> Result<NvidiaPubgCompetitiveProfilePlan, NvidiaProfileError> {
+    let reflex_policy = if request.pubg_reflex_supported {
+        NvidiaPubgReflexPolicy::PreferInGameReflex
+    } else {
+        NvidiaPubgReflexPolicy::DriverLowLatencyOn
+    };
+
+    let vrr_policy = request
+        .display_refresh_hz
+        .filter(|_| request.vrr_enabled)
+        .map(|refresh_rate_hz| NvidiaPubgVrrPolicy::VrrCap {
+            refresh_rate_hz,
+            cap_fps: recommended_vrr_frame_cap(refresh_rate_hz),
+        })
+        .unwrap_or(NvidiaPubgVrrPolicy::ApplicationControlled);
+    let rebar_policy = NvidiaPubgRebarPolicy::from_capability(request.rebar_state);
+    let fps_cap = match vrr_policy {
+        NvidiaPubgVrrPolicy::VrrCap { cap_fps, .. } => Some(cap_fps),
+        NvidiaPubgVrrPolicy::ApplicationControlled => None,
+    };
+    let profile = pubg_competitive_profile_from_policy(reflex_policy, vrr_policy);
+    validate_pubg_competitive_profile(&profile)?;
+
+    Ok(NvidiaPubgCompetitiveProfilePlan {
+        profile,
+        fps_cap,
+        reflex_policy,
+        vrr_policy,
+        rebar_policy,
+        manual_actions: vec![
+            reflex_policy.note().to_owned(),
+            vrr_policy.note(),
+            rebar_policy.note().to_owned(),
+            "Do not import hidden ReBAR compatibility bits or bulk NVIDIA Profile Inspector dumps."
+                .to_owned(),
+        ],
+    })
+}
+
+/// Builds the PUBG competitive NVIDIA application profile for `TslGame.exe`.
+pub fn pubg_competitive_profile(
+    request: &NvidiaPubgCompetitiveProfileRequest,
+) -> Result<NvidiaProfile, NvidiaProfileError> {
+    Ok(plan_pubg_competitive_profile(request)?.profile)
+}
+
+fn pubg_competitive_profile_from_policy(
+    reflex_policy: NvidiaPubgReflexPolicy,
+    vrr_policy: NvidiaPubgVrrPolicy,
+) -> NvidiaProfile {
+    NvidiaProfile::application(
+        LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME,
+        vec![PUBG_EXECUTABLE_NAME.to_owned()],
+        vec![
+            NvidiaProfileSetting::new(
+                "max-frame-rate",
+                "Max Frame Rate",
+                vrr_policy.max_frame_rate_value(),
+                NvidiaProfileSettingVisibility::UserVisible,
+            ),
+            NvidiaProfileSetting::new(
+                "low-latency-mode",
+                "Low Latency Mode",
+                reflex_policy.driver_low_latency_value(),
+                NvidiaProfileSettingVisibility::UserVisible,
+            ),
+            NvidiaProfileSetting::new(
+                "monitor-technology",
+                "Monitor Technology",
+                vrr_policy.monitor_technology_value(),
+                NvidiaProfileSettingVisibility::UserVisible,
+            ),
+            NvidiaProfileSetting::new(
+                "power-management-mode",
+                "Power management mode",
+                "Prefer maximum performance",
+                NvidiaProfileSettingVisibility::UserVisible,
+            ),
+            NvidiaProfileSetting::new(
+                "preferred-refresh-rate",
+                "Preferred refresh rate",
+                "Highest available",
+                NvidiaProfileSettingVisibility::UserVisible,
+            ),
+            NvidiaProfileSetting::new(
+                "shader-cache",
+                "Shader Cache",
+                "On",
+                NvidiaProfileSettingVisibility::Documented,
+            ),
+            NvidiaProfileSetting::new(
+                "texture-filtering-quality",
+                "Texture filtering - Quality",
+                "High performance",
+                NvidiaProfileSettingVisibility::UserVisible,
+            ),
+            NvidiaProfileSetting::new(
+                "vertical-sync",
+                "Vertical sync",
+                vrr_policy.vertical_sync_value(),
+                NvidiaProfileSettingVisibility::UserVisible,
+            ),
+        ],
+    )
+}
+
 /// Validates that a global profile contains only approved conservative settings.
 pub fn validate_global_performance_profile(
     profile: &NvidiaProfile,
@@ -589,6 +970,67 @@ pub fn validate_global_performance_profile(
     Ok(())
 }
 
+/// Validates that the PUBG profile is scoped, visible, and policy-approved.
+pub fn validate_pubg_competitive_profile(
+    profile: &NvidiaProfile,
+) -> Result<(), NvidiaProfileError> {
+    validate_profile(profile)?;
+
+    if profile.name != LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME {
+        return Err(NvidiaProfileError::InvalidProfile {
+            profile: profile.name.clone(),
+            reason: format!(
+                "expected PUBG profile name {LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME:?}"
+            ),
+        });
+    }
+
+    if profile.scope != NvidiaProfileScope::Application {
+        return Err(NvidiaProfileError::InvalidProfile {
+            profile: profile.name.clone(),
+            reason: "PUBG competitive profile must use application scope".to_owned(),
+        });
+    }
+
+    if !profile
+        .applications
+        .iter()
+        .any(|application| application.eq_ignore_ascii_case(PUBG_EXECUTABLE_NAME))
+    {
+        return Err(NvidiaProfileError::InvalidProfile {
+            profile: profile.name.clone(),
+            reason: format!("PUBG profile must target {PUBG_EXECUTABLE_NAME}"),
+        });
+    }
+
+    let mut seen_setting_ids = BTreeSet::new();
+    for setting in &profile.settings {
+        if !seen_setting_ids.insert(setting.id.as_str()) {
+            return Err(NvidiaProfileError::UnsafePubgProfileSetting {
+                setting_id: setting.id.clone(),
+                reason: "duplicate settings make readback and rollback ambiguous".to_owned(),
+            });
+        }
+
+        validate_pubg_competitive_setting(setting)?;
+    }
+
+    for expected_setting_id in REQUIRED_PUBG_COMPETITIVE_SETTING_IDS {
+        if !profile
+            .settings
+            .iter()
+            .any(|setting| setting.id == *expected_setting_id)
+        {
+            return Err(NvidiaProfileError::UnsafePubgProfileSetting {
+                setting_id: (*expected_setting_id).to_owned(),
+                reason: "required competitive setting is missing".to_owned(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
 /// Verifies that post-apply profile readback contains the exact Liiiraa global profile.
 pub fn verify_global_performance_profile_readback(
     snapshot: &NvidiaProfileSnapshot,
@@ -605,6 +1047,30 @@ pub fn verify_global_performance_profile_readback(
         })?;
 
     validate_global_performance_profile(profile)?;
+
+    Ok(profile.clone())
+}
+
+/// Verifies that post-apply profile readback contains the exact Liiiraa PUBG profile.
+pub fn verify_pubg_competitive_profile_readback(
+    snapshot: &NvidiaProfileSnapshot,
+) -> Result<NvidiaProfile, NvidiaProfileError> {
+    let profile = snapshot
+        .profiles
+        .iter()
+        .find(|profile| {
+            profile.scope == NvidiaProfileScope::Application
+                && profile.name == LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME
+                && profile
+                    .applications
+                    .iter()
+                    .any(|application| application.eq_ignore_ascii_case(PUBG_EXECUTABLE_NAME))
+        })
+        .ok_or_else(|| NvidiaProfileError::PubgProfileReadbackMissing {
+            profile: LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME.to_owned(),
+        })?;
+
+    validate_pubg_competitive_profile(profile)?;
 
     Ok(profile.clone())
 }
@@ -630,6 +1096,39 @@ pub fn apply_global_performance_profile<B: NvidiaProfileWriteBridge>(
     Ok(NvidiaGlobalProfileApplyResult {
         tweak_id: NVIDIA_GLOBAL_PROFILE_TWEAK_ID,
         requested_profile,
+        backup,
+        verified_profile,
+    })
+}
+
+/// Backs up current profiles, applies the PUBG profile, and verifies readback.
+pub fn apply_pubg_competitive_profile<B: NvidiaProfileWriteBridge>(
+    detection: &NvidiaDriverDetection,
+    bridge: &mut B,
+    request: &NvidiaPubgCompetitiveProfileRequest,
+) -> Result<NvidiaPubgProfileApplyResult, NvidiaProfileError> {
+    let blocking_processes = request.runtime_state.blocking_profile_mutation_processes();
+    if !blocking_processes.is_empty() {
+        return Err(NvidiaProfileError::PubgOrBattleyeRunning {
+            processes: blocking_processes,
+        });
+    }
+
+    let backup = backup_profiles(
+        detection,
+        &*bridge,
+        NvidiaProfileBackupRequest::all_profiles_before_mutation(),
+    )?;
+    let requested_plan = plan_pubg_competitive_profile(request)?;
+
+    bridge.write_application_profile(requested_plan.profile.clone())?;
+
+    let snapshot = readback_profiles(detection, &*bridge)?;
+    let verified_profile = verify_pubg_competitive_profile_readback(&snapshot)?;
+
+    Ok(NvidiaPubgProfileApplyResult {
+        tweak_id: NVIDIA_PUBG_PROFILE_TWEAK_ID,
+        requested_plan,
         backup,
         verified_profile,
     })
@@ -843,6 +1342,60 @@ fn validate_global_performance_setting(
     Ok(())
 }
 
+fn validate_pubg_competitive_setting(
+    setting: &NvidiaProfileSetting,
+) -> Result<(), NvidiaProfileError> {
+    if setting.visibility == NvidiaProfileSettingVisibility::Hidden {
+        return Err(NvidiaProfileError::UnsafePubgProfileSetting {
+            setting_id: setting.id.clone(),
+            reason: "hidden or undocumented settings are Lab-only, not PUBG competitive defaults"
+                .to_owned(),
+        });
+    }
+
+    let valid = match setting.id.as_str() {
+        "max-frame-rate" => valid_pubg_fps_cap(setting.value.as_str()),
+        "low-latency-mode" => matches!(setting.value.as_str(), "Off" | "On"),
+        "monitor-technology" => {
+            matches!(
+                setting.value.as_str(),
+                "G-SYNC Compatible" | "Use global setting"
+            )
+        }
+        "power-management-mode" => setting.value == "Prefer maximum performance",
+        "preferred-refresh-rate" => setting.value == "Highest available",
+        "shader-cache" => setting.value == "On",
+        "texture-filtering-quality" => setting.value == "High performance",
+        "vertical-sync" => {
+            matches!(
+                setting.value.as_str(),
+                "On" | "Use the 3D application setting"
+            )
+        }
+        _ => false,
+    };
+
+    if valid {
+        Ok(())
+    } else {
+        Err(NvidiaProfileError::UnsafePubgProfileSetting {
+            setting_id: setting.id.clone(),
+            reason: "setting is not part of the approved PUBG competitive policy".to_owned(),
+        })
+    }
+}
+
+fn valid_pubg_fps_cap(value: &str) -> bool {
+    if value == "Off" {
+        return true;
+    }
+
+    value
+        .strip_suffix(" FPS")
+        .and_then(|cap| cap.parse::<u16>().ok())
+        .is_some_and(|cap| (30..=1000).contains(&cap))
+}
+
 fn approved_global_setting(
     setting_id: &str,
 ) -> Option<(&'static str, NvidiaProfileSettingVisibility)> {
@@ -951,6 +1504,40 @@ mod tests {
 
             self.profiles.retain(|existing| {
                 existing.scope != NvidiaProfileScope::Global
+                    || existing.name != profile.name.as_str()
+            });
+            self.profiles.push(profile);
+
+            Ok(())
+        }
+
+        fn write_application_profile(
+            &mut self,
+            mut profile: NvidiaProfile,
+        ) -> Result<(), NvidiaProfileError> {
+            validate_profile(&profile)?;
+            if profile.scope != NvidiaProfileScope::Application {
+                return Err(NvidiaProfileError::InvalidProfile {
+                    profile: profile.name,
+                    reason: "write_application_profile requires an application profile"
+                        .to_owned(),
+                });
+            }
+
+            self.writes.push(profile.clone());
+
+            if let Some((setting_id, value)) = &self.tampered_write {
+                if let Some(setting) = profile
+                    .settings
+                    .iter_mut()
+                    .find(|setting| setting.id == setting_id.as_str())
+                {
+                    setting.value = value.clone();
+                }
+            }
+
+            self.profiles.retain(|existing| {
+                existing.scope != NvidiaProfileScope::Application
                     || existing.name != profile.name.as_str()
             });
             self.profiles.push(profile);
@@ -1310,6 +1897,179 @@ mod tests {
     }
 
     #[test]
+    fn pubg_competitive_profile_uses_vrr_reflex_and_rebar_policy() {
+        let request = NvidiaPubgCompetitiveProfileRequest::new(
+            Some(240),
+            true,
+            true,
+            GpuCapabilityState::Ready,
+            PubgRuntimeState::no_processes(),
+        );
+
+        let plan = plan_pubg_competitive_profile(&request)
+            .expect("PUBG competitive profile should plan from read-only state");
+
+        assert_eq!(plan.profile.name, LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME);
+        assert_eq!(plan.profile.scope, NvidiaProfileScope::Application);
+        assert_eq!(
+            plan.profile.applications,
+            vec![PUBG_EXECUTABLE_NAME.to_owned()]
+        );
+        assert_eq!(plan.fps_cap, Some(237));
+        assert_eq!(
+            plan.reflex_policy,
+            NvidiaPubgReflexPolicy::PreferInGameReflex
+        );
+        assert_eq!(
+            plan.vrr_policy,
+            NvidiaPubgVrrPolicy::VrrCap {
+                refresh_rate_hz: 240,
+                cap_fps: 237,
+            }
+        );
+        assert_eq!(plan.rebar_policy, NvidiaPubgRebarPolicy::OfficialDriverPolicy);
+        assert!(plan
+            .manual_actions
+            .iter()
+            .any(|action| action.contains("Reflex + Boost")));
+
+        let low_latency = setting(&plan.profile, "low-latency-mode");
+        let max_frame_rate = setting(&plan.profile, "max-frame-rate");
+        let v_sync = setting(&plan.profile, "vertical-sync");
+
+        assert_eq!(low_latency.value, "Off");
+        assert_eq!(max_frame_rate.value, "237 FPS");
+        assert_eq!(v_sync.value, "On");
+        assert!(plan
+            .profile
+            .settings
+            .iter()
+            .all(|setting| setting.visibility != NvidiaProfileSettingVisibility::Hidden));
+    }
+
+    #[test]
+    fn pubg_competitive_profile_uses_driver_llm_without_reflex_or_vrr() {
+        let request = NvidiaPubgCompetitiveProfileRequest::new(
+            None,
+            false,
+            false,
+            GpuCapabilityState::Missing,
+            PubgRuntimeState::no_processes(),
+        );
+
+        let plan = plan_pubg_competitive_profile(&request)
+            .expect("non-VRR non-Reflex path should still produce a safe profile");
+
+        assert_eq!(
+            plan.reflex_policy,
+            NvidiaPubgReflexPolicy::DriverLowLatencyOn
+        );
+        assert_eq!(plan.vrr_policy, NvidiaPubgVrrPolicy::ApplicationControlled);
+        assert_eq!(
+            plan.rebar_policy,
+            NvidiaPubgRebarPolicy::RecommendOfficialEnablement
+        );
+        assert_eq!(setting(&plan.profile, "low-latency-mode").value, "On");
+        assert_eq!(setting(&plan.profile, "max-frame-rate").value, "Off");
+        assert_eq!(
+            setting(&plan.profile, "vertical-sync").value,
+            "Use the 3D application setting"
+        );
+    }
+
+    #[test]
+    fn pubg_profile_apply_backs_up_writes_and_verifies_readback() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let mut bridge = FixtureProfileBridge::new(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![
+                NvidiaProfile::global("Base Profile", Vec::new()),
+                pubg_profile_with_reversed_settings(),
+            ],
+        );
+        let request = NvidiaPubgCompetitiveProfileRequest::new(
+            Some(165),
+            true,
+            true,
+            GpuCapabilityState::Ready,
+            PubgRuntimeState::no_processes(),
+        );
+
+        let result = apply_pubg_competitive_profile(&detection, &mut bridge, &request)
+            .expect("PUBG profile should apply and verify through readback");
+
+        assert_eq!(result.tweak_id, NVIDIA_PUBG_PROFILE_TWEAK_ID);
+        assert_eq!(
+            result.requested_plan.profile.name,
+            LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME
+        );
+        assert_eq!(result.backup.tweak_id, NVIDIA_PROFILE_BACKUP_TWEAK_ID);
+        assert_eq!(result.backup.snapshot.profiles.len(), 2);
+        assert_eq!(bridge.writes.len(), 1);
+        assert_eq!(
+            result.verified_profile.name,
+            LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME
+        );
+        assert_eq!(
+            setting(&result.verified_profile, "max-frame-rate").value,
+            "162 FPS"
+        );
+    }
+
+    #[test]
+    fn pubg_profile_apply_defers_while_pubg_or_battleye_runs() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let mut bridge = FixtureProfileBridge::new(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![NvidiaProfile::global("Base Profile", Vec::new())],
+        );
+        let request = NvidiaPubgCompetitiveProfileRequest::new(
+            Some(144),
+            true,
+            true,
+            GpuCapabilityState::Ready,
+            PubgRuntimeState::from_process_names(["BEService.exe"]),
+        );
+
+        let error = apply_pubg_competitive_profile(&detection, &mut bridge, &request)
+            .expect_err("live BattlEye should block profile mutation");
+
+        assert!(matches!(
+            error,
+            NvidiaProfileError::PubgOrBattleyeRunning { processes }
+                if processes == vec!["BEService.exe".to_owned()]
+        ));
+        assert!(bridge.writes.is_empty());
+    }
+
+    #[test]
+    fn pubg_profile_validation_rejects_hidden_rebar_override() {
+        let mut profile = pubg_competitive_profile(&NvidiaPubgCompetitiveProfileRequest::new(
+            Some(240),
+            true,
+            true,
+            GpuCapabilityState::Ready,
+            PubgRuntimeState::no_processes(),
+        ))
+        .expect("base PUBG profile should be valid");
+        profile.settings.push(NvidiaProfileSetting::new(
+            "rebar-hidden-override",
+            "Resizable BAR hidden override",
+            "Forced",
+            NvidiaProfileSettingVisibility::Hidden,
+        ));
+
+        let error = validate_pubg_competitive_profile(&profile)
+            .expect_err("hidden ReBAR settings must be Lab-only");
+
+        assert!(matches!(
+            error,
+            NvidiaProfileError::UnsafePubgProfileSetting { setting_id, .. }
+                if setting_id == "rebar-hidden-override"
+        ));
+    }
+
+    #[test]
     fn catalog_fixture_matches_global_profile_contract() {
         let fixture = include_str!("../tests/fixtures/nvidia_global_performance_profile.catalog.json");
 
@@ -1323,6 +2083,36 @@ mod tests {
             assert!(fixture.contains(setting.id.as_str()));
             assert!(fixture.contains(setting.value.as_str()));
         }
+    }
+
+    #[test]
+    fn catalog_fixture_matches_pubg_profile_contract() {
+        let fixture =
+            include_str!("../tests/fixtures/nvidia_pubg_competitive_profile.catalog.json");
+
+        assert!(fixture.contains(NVIDIA_PUBG_PROFILE_TWEAK_ID));
+        assert!(fixture.contains(LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME));
+        assert!(fixture.contains(PUBG_EXECUTABLE_NAME));
+        assert!(fixture.contains("\"mode\": \"competitive\""));
+        assert!(fixture.contains("\"requiresBackup\": true"));
+        assert!(fixture.contains("\"verify\": \"readback\""));
+        assert!(fixture.contains("\"gameClosedRequired\": true"));
+        assert!(fixture.contains("Reflex"));
+        assert!(fixture.contains("G-SYNC"));
+        assert!(fixture.contains("Resizable BAR"));
+        assert!(!fixture.contains("\"visibility\": \"hidden\""));
+
+        for setting_id in REQUIRED_PUBG_COMPETITIVE_SETTING_IDS {
+            assert!(fixture.contains(*setting_id));
+        }
+    }
+
+    fn setting<'a>(profile: &'a NvidiaProfile, setting_id: &str) -> &'a NvidiaProfileSetting {
+        profile
+            .settings
+            .iter()
+            .find(|setting| setting.id == setting_id)
+            .expect("profile setting should exist")
     }
 
     fn ready_detection(
