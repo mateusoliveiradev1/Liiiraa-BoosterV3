@@ -12,6 +12,7 @@ pub mod scan;
 pub mod scheduler;
 pub mod security_tradeoff;
 pub mod storage;
+pub mod windows_lab;
 pub mod windows_update;
 
 pub use backup::WindowsRollbackFixture;
@@ -89,6 +90,13 @@ pub use storage::{
     verify_storage_sense_plan_fixture, NtfsMetadataSettingsError,
     NtfsMetadataSettingsErrorReason, NtfsMetadataSettingsSummary, StorageSenseRegistryError,
     StorageSenseRegistryErrorReason, StorageSenseRegistrySummary,
+};
+pub use windows_lab::{
+    apply_windows_lab_experiment_plan_to_fixture,
+    build_consented_windows_lab_experiment_plan_from_state,
+    build_windows_lab_experiment_plan_from_scan,
+    verify_windows_lab_experiment_plan_fixture, WindowsLabSettingsError,
+    WindowsLabSettingsErrorReason, WindowsLabSettingsSummary,
 };
 pub use windows_update::{
     apply_windows_update_plan_to_fixture, build_windows_update_plan_from_scan,

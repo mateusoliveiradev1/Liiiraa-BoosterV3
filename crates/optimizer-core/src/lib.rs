@@ -15,6 +15,7 @@ pub mod scheduler;
 pub mod security_tradeoff;
 pub mod storage;
 pub mod tweak_contracts;
+pub mod windows_lab;
 pub mod windows_update;
 
 /// Static metadata describing this workspace crate.
