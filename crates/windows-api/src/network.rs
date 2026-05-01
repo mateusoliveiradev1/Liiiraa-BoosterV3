@@ -4,14 +4,19 @@ use std::fmt;
 
 use optimizer_core::{
     network::{
-        build_network_adapter_power_plan, is_network_adapter_eee_mutation_target,
-        is_network_adapter_power_saving_target, is_network_adapter_power_tweak_id,
+        build_network_adapter_power_plan, build_network_advanced_tuning_plan,
+        is_network_adapter_eee_mutation_target, is_network_adapter_power_saving_target,
+        is_network_adapter_power_tweak_id, is_network_advanced_tuning_tweak_id,
+        network_advanced_apply_requires_lab_consent_and_benchmark,
+        network_advanced_plan_is_not_safe_default, network_advanced_tweak_targets_property,
         AdapterPowerSavingState, NetworkAdapterAdvancedProperty, NetworkAdapterInspection,
-        NetworkAdapterPowerPlanRequest, NetworkControlConsent,
+        NetworkAdapterPowerPlanRequest, NetworkAdvancedTuningPlanRequest, NetworkControlConsent,
         NET_ADAPTER_POWER_SAVING_OFF_TWEAK_ID, NET_EEE_GREEN_OFF_TWEAK_ID,
+        NET_INTERRUPT_MODERATION_LAB_TWEAK_ID, NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID,
+        NET_RSC_PROFILE_TWEAK_ID, NET_RSC_VPN_DIAGNOSIS_TWEAK_ID, NET_RSS_ENSURE_TWEAK_ID,
     },
     power_plan::{DevicePowerClass, PowerSourceState},
-    tweak_contracts::{PlanAction, TweakOperationKind, TweakPlan},
+    tweak_contracts::{PlanAction, TweakMode, TweakOperationKind, TweakPlan},
 };
 
 use crate::{
@@ -80,6 +85,48 @@ pub fn build_consented_network_adapter_power_plan_from_scan(
     build_network_adapter_power_plan(&request)
 }
 
+/// Builds a T055 advanced NIC plan from read-only scan data.
+#[must_use]
+pub fn build_network_advanced_tuning_plan_from_scan(
+    plan_id: impl Into<String>,
+    report: &SystemScanReport,
+) -> TweakPlan {
+    let mut request = NetworkAdvancedTuningPlanRequest::new(plan_id);
+    request.adapters = report
+        .network_adapters
+        .iter()
+        .map(adapter_from_scan)
+        .collect();
+
+    build_network_advanced_tuning_plan(&request)
+}
+
+/// Builds a consented T055 Lab advanced NIC plan from read-only scan data.
+#[must_use]
+pub fn build_consented_network_advanced_tuning_plan_from_scan(
+    plan_id: impl Into<String>,
+    report: &SystemScanReport,
+    baseline_benchmark_captured: bool,
+    diagnostic_issue_confirmed: bool,
+) -> TweakPlan {
+    let mut request = NetworkAdvancedTuningPlanRequest::new(plan_id);
+    request.requested_mode = TweakMode::Lab;
+    request.rss_consent = NetworkControlConsent::Granted;
+    request.rsc_consent = NetworkControlConsent::Granted;
+    request.offload_diagnostics_consent = NetworkControlConsent::Granted;
+    request.interrupt_moderation_consent = NetworkControlConsent::Granted;
+    request.baseline_benchmark_captured = baseline_benchmark_captured;
+    request.adapter_restart_accepted = true;
+    request.diagnostic_issue_confirmed = diagnostic_issue_confirmed;
+    request.adapters = report
+        .network_adapters
+        .iter()
+        .map(adapter_from_scan)
+        .collect();
+
+    build_network_advanced_tuning_plan(&request)
+}
+
 /// Applies T047 network adapter setting changes to an in-memory Windows fixture.
 pub fn apply_network_adapter_power_plan_to_fixture(
     fixture: &mut WindowsRollbackFixture,
@@ -121,6 +168,72 @@ pub fn verify_network_adapter_power_plan_fixture(
 
         for change in &item.changes {
             validate_change(&item.tweak_id, change)?;
+            let desired = change.desired_value.as_deref().ok_or_else(|| {
+                NetworkAdapterSettingsError::missing_desired_value(
+                    item.tweak_id.clone(),
+                    change.target.clone(),
+                )
+            })?;
+
+            if fixture.value(&change.target) != Some(desired) {
+                return Err(NetworkAdapterSettingsError::verification_failed(
+                    item.tweak_id.clone(),
+                    change.target.clone(),
+                ));
+            }
+
+            summary.targets.push(change.target.clone());
+        }
+    }
+
+    Ok(summary)
+}
+
+/// Applies T055 advanced NIC Lab changes to an in-memory Windows fixture.
+pub fn apply_network_advanced_tuning_plan_to_fixture(
+    fixture: &mut WindowsRollbackFixture,
+    plan: &TweakPlan,
+) -> Result<NetworkAdapterSettingsSummary, NetworkAdapterSettingsError> {
+    validate_explicit_advanced_network_plan(plan)?;
+
+    let mut summary = NetworkAdapterSettingsSummary::empty();
+
+    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+        validate_advanced_tweak_id(&item.tweak_id)?;
+        summary.item_count += 1;
+
+        for change in &item.changes {
+            validate_advanced_change(&item.tweak_id, change)?;
+            let desired = change.desired_value.as_deref().ok_or_else(|| {
+                NetworkAdapterSettingsError::missing_desired_value(
+                    item.tweak_id.clone(),
+                    change.target.clone(),
+                )
+            })?;
+
+            fixture.set_value(change.target.clone(), desired.to_owned());
+            summary.targets.push(change.target.clone());
+        }
+    }
+
+    Ok(summary)
+}
+
+/// Verifies T055 advanced NIC Lab changes against an in-memory fixture.
+pub fn verify_network_advanced_tuning_plan_fixture(
+    fixture: &WindowsRollbackFixture,
+    plan: &TweakPlan,
+) -> Result<NetworkAdapterSettingsSummary, NetworkAdapterSettingsError> {
+    validate_explicit_advanced_network_plan(plan)?;
+
+    let mut summary = NetworkAdapterSettingsSummary::empty();
+
+    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+        validate_advanced_tweak_id(&item.tweak_id)?;
+        summary.item_count += 1;
+
+        for change in &item.changes {
+            validate_advanced_change(&item.tweak_id, change)?;
             let desired = change.desired_value.as_deref().ok_or_else(|| {
                 NetworkAdapterSettingsError::missing_desired_value(
                     item.tweak_id.clone(),
@@ -197,6 +310,26 @@ fn validate_tweak_id(tweak_id: &str) -> Result<(), NetworkAdapterSettingsError> 
     }
 }
 
+fn validate_explicit_advanced_network_plan(
+    plan: &TweakPlan,
+) -> Result<(), NetworkAdapterSettingsError> {
+    if network_advanced_plan_is_not_safe_default(plan)
+        && network_advanced_apply_requires_lab_consent_and_benchmark(plan)
+    {
+        Ok(())
+    } else {
+        Err(NetworkAdapterSettingsError::lab_gate_denied())
+    }
+}
+
+fn validate_advanced_tweak_id(tweak_id: &str) -> Result<(), NetworkAdapterSettingsError> {
+    if is_network_advanced_tuning_tweak_id(tweak_id) {
+        Ok(())
+    } else {
+        Err(NetworkAdapterSettingsError::unsupported_tweak(tweak_id))
+    }
+}
+
 fn validate_change(
     tweak_id: &str,
     change: &optimizer_core::tweak_contracts::PlannedChange,
@@ -226,6 +359,27 @@ fn validate_change(
     Ok(())
 }
 
+fn validate_advanced_change(
+    tweak_id: &str,
+    change: &optimizer_core::tweak_contracts::PlannedChange,
+) -> Result<(), NetworkAdapterSettingsError> {
+    if change.operation != TweakOperationKind::Write {
+        return Err(NetworkAdapterSettingsError::unsupported_operation(
+            tweak_id,
+            change.target.clone(),
+        ));
+    }
+
+    if !network_advanced_tweak_targets_property(tweak_id, &change.target) {
+        return Err(NetworkAdapterSettingsError::unsupported_target(
+            tweak_id,
+            change.target.clone(),
+        ));
+    }
+
+    Ok(())
+}
+
 /// Stable failure reason for fixture-backed network adapter operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkAdapterSettingsErrorReason {
@@ -239,6 +393,8 @@ pub enum NetworkAdapterSettingsErrorReason {
     MissingDesiredValue,
     /// Fixture readback did not match the desired value.
     VerificationFailed,
+    /// Plan attempted advanced NIC tuning outside the Lab/benchmark gate.
+    LabGateDenied,
 }
 
 impl NetworkAdapterSettingsErrorReason {
@@ -251,6 +407,7 @@ impl NetworkAdapterSettingsErrorReason {
             Self::UnsupportedOperation => "unsupported_operation",
             Self::MissingDesiredValue => "missing_desired_value",
             Self::VerificationFailed => "verification_failed",
+            Self::LabGateDenied => "lab_gate_denied",
         }
     }
 
@@ -263,6 +420,9 @@ impl NetworkAdapterSettingsErrorReason {
             Self::UnsupportedOperation => "Plan contains an unsupported operation",
             Self::MissingDesiredValue => "Plan write is missing a desired value",
             Self::VerificationFailed => "Network adapter fixture readback did not match the plan",
+            Self::LabGateDenied => {
+                "Advanced NIC tuning requires Lab mode, explicit consent, and a baseline benchmark"
+            }
         }
     }
 }
@@ -326,6 +486,10 @@ impl NetworkAdapterSettingsError {
             Some(tweak_id.into()),
             Some(target.into()),
         )
+    }
+
+    fn lab_gate_denied() -> Self {
+        Self::new(NetworkAdapterSettingsErrorReason::LabGateDenied, None, None)
     }
 
     /// Returns the stable failure reason.
@@ -512,5 +676,176 @@ mod tests {
             error.reason(),
             NetworkAdapterSettingsErrorReason::UnsupportedTarget
         );
+    }
+
+    #[test]
+    fn scan_fixture_builds_conservative_advanced_network_plan() {
+        let report = crate::parse_system_scan_report(FIXTURE).expect("fixture should parse");
+        let plan = build_network_advanced_tuning_plan_from_scan("plan-t055-fixture", &report);
+        let rss = item(&plan, NET_RSS_ENSURE_TWEAK_ID);
+        let keep_default = item(&plan, NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID);
+
+        assert!(!plan.has_apply_items());
+        assert_eq!(rss.action, PlanAction::Recommend);
+        assert_eq!(rss.mode, TweakMode::Lab);
+        assert_eq!(keep_default.action, PlanAction::DetectOnly);
+        assert!(plan
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Safe/default")));
+    }
+
+    #[test]
+    fn fixture_applies_verifies_and_rolls_back_advanced_network_lab_values() {
+        let report = crate::parse_system_scan_report(FIXTURE).expect("fixture should parse");
+        let plan = build_consented_network_advanced_tuning_plan_from_scan(
+            "plan-t055-consented",
+            &report,
+            true,
+            true,
+        );
+        let mut fixture = WindowsRollbackFixture::new();
+
+        for change in plan
+            .items
+            .iter()
+            .filter(|item| item.action == PlanAction::Apply)
+            .flat_map(|item| item.changes.iter())
+        {
+            fixture.set_value(
+                change.target.clone(),
+                change
+                    .previous_value
+                    .clone()
+                    .expect("advanced network changes should include previous value"),
+            );
+        }
+
+        let backups = capture_plan_backups(&plan, &mut fixture)
+            .expect("advanced network backups should capture");
+        assert_eq!(backups.len(), 4);
+
+        let applied = apply_network_advanced_tuning_plan_to_fixture(&mut fixture, &plan)
+            .expect("advanced network fixture apply should succeed");
+        assert_eq!(applied.item_count, 4);
+        assert!(applied
+            .targets
+            .iter()
+            .any(|target| target.ends_with("/advanced/receive-side-scaling")));
+        assert!(applied
+            .targets
+            .iter()
+            .any(|target| target.ends_with("/advanced/interrupt-moderation")));
+
+        verify_network_advanced_tuning_plan_fixture(&fixture, &plan)
+            .expect("advanced network fixture readback should verify");
+
+        for backup in backups {
+            let tweak_id = backup.tweak_id.clone();
+            let plan_item = item(&plan, &tweak_id);
+            let rollback_request =
+                RollbackRequest::new(tweak_id, backup, plan_item.rollback.clone())
+                    .expect("rollback request should be valid");
+            execute_rollback(&mut fixture, &rollback_request)
+                .expect("rollback should restore advanced network fixture state");
+        }
+
+        assert_eq!(
+            fixture.value("netadapter:ethernet/advanced/receive-side-scaling"),
+            Some("Disabled")
+        );
+        assert_eq!(
+            fixture.value("netadapter:ethernet/advanced/interrupt-moderation"),
+            Some("Enabled")
+        );
+    }
+
+    #[test]
+    fn fixture_rejects_safe_mode_advanced_network_apply() {
+        let plan = advanced_network_plan(
+            TweakMode::Safe,
+            NET_INTERRUPT_MODERATION_LAB_TWEAK_ID,
+            "netadapter:ethernet/advanced/interrupt-moderation",
+        );
+        let mut fixture = WindowsRollbackFixture::new()
+            .with_value("netadapter:ethernet/advanced/interrupt-moderation", "Enabled");
+
+        let error = apply_network_advanced_tuning_plan_to_fixture(&mut fixture, &plan)
+            .expect_err("Safe/default advanced NIC apply must be denied");
+
+        assert_eq!(
+            error.reason(),
+            NetworkAdapterSettingsErrorReason::LabGateDenied
+        );
+    }
+
+    #[test]
+    fn fixture_rejects_unowned_advanced_network_target() {
+        let plan = advanced_network_plan(
+            TweakMode::Lab,
+            NET_INTERRUPT_MODERATION_LAB_TWEAK_ID,
+            "netadapter:ethernet/advanced/jumbo-packet",
+        );
+        let mut fixture = WindowsRollbackFixture::new()
+            .with_value("netadapter:ethernet/advanced/jumbo-packet", "1514 Bytes");
+
+        let error = apply_network_advanced_tuning_plan_to_fixture(&mut fixture, &plan)
+            .expect_err("Jumbo Frame target is outside T055 allowlist");
+
+        assert_eq!(
+            error.reason(),
+            NetworkAdapterSettingsErrorReason::UnsupportedTarget
+        );
+    }
+
+    fn advanced_network_plan(
+        requested_mode: TweakMode,
+        tweak_id: &str,
+        target: &str,
+    ) -> TweakPlan {
+        TweakPlan {
+            id: "plan-advanced-network-fixture".to_owned(),
+            requested_mode,
+            catalog_schema_version: "1".to_owned(),
+            items: vec![TweakPlanItem {
+                tweak_id: tweak_id.to_owned(),
+                category: TweakCategory::Network,
+                action: PlanAction::Apply,
+                mode: TweakMode::Lab,
+                risk: TweakRisk::High,
+                changes: vec![PlannedChange {
+                    target: target.to_owned(),
+                    operation: TweakOperationKind::Write,
+                    previous_value: Some("Enabled".to_owned()),
+                    desired_value: Some("Disabled".to_owned()),
+                    scope: SessionScope::Persistent,
+                }],
+                backup: BackupRequirement::Required {
+                    kind: RollbackKind::ExactValue,
+                    target: target.to_owned(),
+                },
+                rollback: RollbackPlan {
+                    kind: RollbackKind::ExactValue,
+                    steps: vec![optimizer_core::tweak_contracts::RollbackStep {
+                        summary: "Restore previous advanced network adapter setting.".to_owned(),
+                        target: target.to_owned(),
+                        operation: TweakOperationKind::Write,
+                        expected_state: Some("Enabled".to_owned()),
+                    }],
+                    requires_admin: true,
+                    reboot: RebootPolicy::None,
+                    manual_instructions: Vec::new(),
+                },
+                reboot: RebootPolicy::None,
+                requires_admin: true,
+                warnings: vec![
+                    "Interrupt moderation is Lab-only and requires explicit consent.".to_owned(),
+                    "Baseline benchmark is required before applying advanced network tuning."
+                        .to_owned(),
+                    "Adapter restart or a brief link interruption may be required.".to_owned(),
+                ],
+            }],
+            warnings: Vec::new(),
+        }
     }
 }

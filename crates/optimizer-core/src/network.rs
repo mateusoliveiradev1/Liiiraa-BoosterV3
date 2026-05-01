@@ -1,4 +1,4 @@
-//! Safe planning for network adapter power management and EEE/Green Ethernet controls.
+//! Safe planning for network adapter power management plus Lab-only advanced NIC controls.
 
 use crate::{
     catalog::SUPPORTED_CATALOG_SCHEMA_VERSION,
@@ -14,6 +14,16 @@ use crate::{
 pub const NET_ADAPTER_POWER_SAVING_OFF_TWEAK_ID: &str = "net.adapter.power-saving.off";
 /// Tweak ID for disabling Energy Efficient Ethernet, Green Ethernet, or Energy Detect.
 pub const NET_EEE_GREEN_OFF_TWEAK_ID: &str = "net.eee.green.off";
+/// Tweak ID for benchmark-gated Receive Side Scaling enablement.
+pub const NET_RSS_ENSURE_TWEAK_ID: &str = "net.rss.ensure";
+/// Tweak ID for benchmark-gated Receive Segment Coalescing profiling.
+pub const NET_RSC_PROFILE_TWEAK_ID: &str = "net.rsc.profile";
+/// Tweak ID for VPN/capture-tool RSC and offload diagnostics.
+pub const NET_RSC_VPN_DIAGNOSIS_TWEAK_ID: &str = "net.rsc.vpn-diagnosis";
+/// Tweak ID for keeping checksum and large-send offloads conservative by default.
+pub const NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID: &str = "net.offloads.keep-default";
+/// Tweak ID for benchmark-gated interrupt moderation tuning.
+pub const NET_INTERRUPT_MODERATION_LAB_TWEAK_ID: &str = "net.interrupt-moderation.lab";
 /// Prefix for adapter-specific logical network targets.
 pub const NETWORK_ADAPTER_TARGET_PREFIX: &str = "netadapter:";
 
@@ -21,6 +31,16 @@ const POWER_SAVING_SUFFIX: &str = "/power-management/allow-computer-to-turn-off-
 const ADVANCED_PROPERTY_PREFIX: &str = "/advanced/";
 const DESIRED_POWER_SAVING_STATE: &str = "disabled";
 const DESIRED_EEE_STATE: &str = "Disabled";
+const DESIRED_ADVANCED_ENABLED_STATE: &str = "Enabled";
+const DESIRED_ADVANCED_DISABLED_STATE: &str = "Disabled";
+const ADVANCED_NETWORK_BENCHMARK_WARNING: &str = concat!(
+    "Baseline benchmark is required before applying advanced network tuning; compare ",
+    "latency, jitter, throughput, and frametime stability before and after."
+);
+const ADVANCED_NETWORK_RESTART_WARNING: &str = concat!(
+    "Adapter restart or a brief link interruption may be required after changing advanced ",
+    "network adapter properties."
+);
 
 /// Explicit consent state for prompt-only network controls.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,6 +188,50 @@ impl NetworkAdapterPowerPlanRequest {
     }
 }
 
+/// Request used to build the T055 advanced NIC Lab plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkAdvancedTuningPlanRequest {
+    /// Stable plan ID supplied by the caller.
+    pub plan_id: String,
+    /// Highest mode requested by the user.
+    pub requested_mode: TweakMode,
+    /// Consent for Receive Side Scaling enablement.
+    pub rss_consent: NetworkControlConsent,
+    /// Consent for Receive Segment Coalescing profiling.
+    pub rsc_consent: NetworkControlConsent,
+    /// Consent for VPN/capture-tool offload diagnostics.
+    pub offload_diagnostics_consent: NetworkControlConsent,
+    /// Consent for interrupt moderation profiling.
+    pub interrupt_moderation_consent: NetworkControlConsent,
+    /// Whether a baseline benchmark exists before applying advanced NIC changes.
+    pub baseline_benchmark_captured: bool,
+    /// Whether the user accepted adapter restart or link-flap risk.
+    pub adapter_restart_accepted: bool,
+    /// Whether the user identified VPN, packet-capture, or driver-specific network symptoms.
+    pub diagnostic_issue_confirmed: bool,
+    /// Physical adapters discovered during scan.
+    pub adapters: Vec<NetworkAdapterInspection>,
+}
+
+impl NetworkAdvancedTuningPlanRequest {
+    /// Creates a conservative advanced NIC request.
+    #[must_use]
+    pub fn new(plan_id: impl Into<String>) -> Self {
+        Self {
+            plan_id: plan_id.into(),
+            requested_mode: TweakMode::Safe,
+            rss_consent: NetworkControlConsent::NotGranted,
+            rsc_consent: NetworkControlConsent::NotGranted,
+            offload_diagnostics_consent: NetworkControlConsent::NotGranted,
+            interrupt_moderation_consent: NetworkControlConsent::NotGranted,
+            baseline_benchmark_captured: false,
+            adapter_restart_accepted: false,
+            diagnostic_issue_confirmed: false,
+            adapters: Vec::new(),
+        }
+    }
+}
+
 /// Builds a dry-run plan for T047 NIC power-saving and EEE/Green Ethernet controls.
 #[must_use]
 pub fn build_network_adapter_power_plan(request: &NetworkAdapterPowerPlanRequest) -> TweakPlan {
@@ -193,12 +257,61 @@ pub fn build_network_adapter_power_plan(request: &NetworkAdapterPowerPlanRequest
     }
 }
 
+/// Builds a dry-run plan for T055 advanced NIC Lab tuning.
+#[must_use]
+pub fn build_network_advanced_tuning_plan(
+    request: &NetworkAdvancedTuningPlanRequest,
+) -> TweakPlan {
+    let items = vec![
+        rss_ensure_item(request),
+        rsc_profile_item(request),
+        rsc_vpn_diagnosis_item(request),
+        offloads_keep_default_item(request),
+        interrupt_moderation_lab_item(request),
+    ];
+    let warnings = items
+        .iter()
+        .flat_map(|item| item.warnings.iter())
+        .filter(|warning| {
+            warning.contains("Lab")
+                || warning.contains("benchmark")
+                || warning.contains("adapter")
+                || warning.contains("offload")
+                || warning.contains("RSC")
+                || warning.contains("RSS")
+                || warning.contains("Interrupt")
+        })
+        .cloned()
+        .collect();
+
+    TweakPlan {
+        id: request.plan_id.clone(),
+        requested_mode: request.requested_mode,
+        catalog_schema_version: SUPPORTED_CATALOG_SCHEMA_VERSION.to_owned(),
+        items,
+        warnings,
+    }
+}
+
 /// Returns true when the ID belongs to the T047 network adapter power scope.
 #[must_use]
 pub fn is_network_adapter_power_tweak_id(tweak_id: &str) -> bool {
     matches!(
         tweak_id,
         NET_ADAPTER_POWER_SAVING_OFF_TWEAK_ID | NET_EEE_GREEN_OFF_TWEAK_ID
+    )
+}
+
+/// Returns true when the ID belongs to the T055 advanced NIC tuning scope.
+#[must_use]
+pub fn is_network_advanced_tuning_tweak_id(tweak_id: &str) -> bool {
+    matches!(
+        tweak_id,
+        NET_RSS_ENSURE_TWEAK_ID
+            | NET_RSC_PROFILE_TWEAK_ID
+            | NET_RSC_VPN_DIAGNOSIS_TWEAK_ID
+            | NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID
+            | NET_INTERRUPT_MODERATION_LAB_TWEAK_ID
     )
 }
 
@@ -225,10 +338,85 @@ pub fn network_adapter_eee_property_target(
     })
 }
 
+/// Builds the adapter-specific target for an allowlisted advanced NIC property.
+#[must_use]
+pub fn network_adapter_advanced_property_target(
+    adapter_id: &str,
+    property: &NetworkAdapterAdvancedProperty,
+) -> Option<String> {
+    advanced_property_kind(property).map(|_| {
+        format!(
+            "{NETWORK_ADAPTER_TARGET_PREFIX}{}{ADVANCED_PROPERTY_PREFIX}{}",
+            target_slug(adapter_id),
+            target_slug(&property.display_name)
+        )
+    })
+}
+
 /// Returns true when a target is an adapter-specific T047 mutation target.
 #[must_use]
 pub fn is_network_adapter_power_mutation_target(target: &str) -> bool {
     is_network_adapter_power_saving_target(target) || is_network_adapter_eee_mutation_target(target)
+}
+
+/// Returns true when a target is an adapter-specific T055 advanced NIC property target.
+#[must_use]
+pub fn is_network_advanced_tuning_target(target: &str) -> bool {
+    target.starts_with(NETWORK_ADAPTER_TARGET_PREFIX)
+        && !target.contains('*')
+        && advanced_property_kind_from_target(target).is_some()
+}
+
+/// Returns true when a T055 tweak ID is paired with an allowed advanced NIC target.
+#[must_use]
+pub fn network_advanced_tweak_targets_property(tweak_id: &str, target: &str) -> bool {
+    let Some(kind) = advanced_property_kind_from_target(target) else {
+        return false;
+    };
+
+    matches!(
+        (tweak_id, kind),
+        (NET_RSS_ENSURE_TWEAK_ID, AdvancedNetworkPropertyKind::Rss)
+            | (NET_RSC_PROFILE_TWEAK_ID, AdvancedNetworkPropertyKind::Rsc)
+            | (NET_RSC_VPN_DIAGNOSIS_TWEAK_ID, AdvancedNetworkPropertyKind::Rsc)
+            | (NET_RSC_VPN_DIAGNOSIS_TWEAK_ID, AdvancedNetworkPropertyKind::Offload)
+            | (
+                NET_INTERRUPT_MODERATION_LAB_TWEAK_ID,
+                AdvancedNetworkPropertyKind::InterruptModeration
+            )
+    )
+}
+
+/// Returns true when Safe/default planning does not apply advanced NIC changes.
+#[must_use]
+pub fn network_advanced_plan_is_not_safe_default(plan: &TweakPlan) -> bool {
+    plan.requested_mode != TweakMode::Safe
+        || plan.items.iter().all(|item| item.action != PlanAction::Apply)
+}
+
+/// Returns true when apply items are Lab, explicitly consented, and benchmark-framed.
+#[must_use]
+pub fn network_advanced_apply_requires_lab_consent_and_benchmark(plan: &TweakPlan) -> bool {
+    plan.items.iter().all(|item| {
+        if item.action != PlanAction::Apply {
+            return true;
+        }
+
+        item.mode == TweakMode::Lab
+            && item.risk == TweakRisk::High
+            && item
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("explicit consent"))
+            && item
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Baseline benchmark"))
+            && item
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Adapter restart"))
+    })
 }
 
 /// Returns true when a target is an adapter-specific power-saving target.
@@ -345,6 +533,321 @@ fn eee_green_item(request: &NetworkAdapterPowerPlanRequest) -> TweakPlanItem {
     )
 }
 
+fn rss_ensure_item(request: &NetworkAdvancedTuningPlanRequest) -> TweakPlanItem {
+    advanced_lab_item(
+        AdvancedLabItemInput {
+            tweak_id: NET_RSS_ENSURE_TWEAK_ID,
+            kind: AdvancedNetworkPropertyKind::Rss,
+            desired_value: DESIRED_ADVANCED_ENABLED_STATE,
+            consent: request.rss_consent,
+            summary: "Receive Side Scaling",
+            no_support_warning: "No exact Receive Side Scaling adapter property was exposed.",
+            issue_context_required: false,
+        },
+        request,
+    )
+}
+
+fn rsc_profile_item(request: &NetworkAdvancedTuningPlanRequest) -> TweakPlanItem {
+    advanced_lab_item(
+        AdvancedLabItemInput {
+            tweak_id: NET_RSC_PROFILE_TWEAK_ID,
+            kind: AdvancedNetworkPropertyKind::Rsc,
+            desired_value: DESIRED_ADVANCED_DISABLED_STATE,
+            consent: request.rsc_consent,
+            summary: "Receive Segment Coalescing",
+            no_support_warning: "No exact Receive Segment Coalescing adapter property was exposed.",
+            issue_context_required: false,
+        },
+        request,
+    )
+}
+
+fn rsc_vpn_diagnosis_item(request: &NetworkAdvancedTuningPlanRequest) -> TweakPlanItem {
+    let changes = advanced_property_changes(
+        &request.adapters,
+        AdvancedNetworkPropertyKind::Offload,
+        DESIRED_ADVANCED_DISABLED_STATE,
+    );
+    let warnings = advanced_lab_warnings(
+        request,
+        request.offload_diagnostics_consent,
+        "RSC/offload VPN or capture-tool diagnosis",
+        changes.is_empty(),
+        "No exact RSC or checksum/large-send offload adapter property was exposed.",
+        true,
+    );
+    let action = advanced_lab_action(
+        request,
+        request.offload_diagnostics_consent,
+        changes.is_empty(),
+        true,
+    );
+
+    advanced_plan_item(AdvancedPlanItemInput {
+        tweak_id: NET_RSC_VPN_DIAGNOSIS_TWEAK_ID,
+        action,
+        mode: TweakMode::Lab,
+        risk: TweakRisk::High,
+        changes,
+        rollback_kind: RollbackKind::ExactValue,
+        requires_admin: true,
+        warnings,
+    })
+}
+
+fn offloads_keep_default_item(request: &NetworkAdvancedTuningPlanRequest) -> TweakPlanItem {
+    let detected_count = request
+        .adapters
+        .iter()
+        .flat_map(|adapter| adapter.advanced_properties.iter())
+        .filter(|property| {
+            advanced_property_kind(property) == Some(AdvancedNetworkPropertyKind::Offload)
+        })
+        .count();
+    let mut warnings = vec![
+        "Checksum and large-send offloads stay at adapter defaults unless a Lab diagnostic plan \
+         owns a benchmarked change."
+            .to_owned(),
+        "No offload changes are included in Safe/default optimization.".to_owned(),
+        "No game files, memory, BattlEye files, or anti-cheat processes are modified.".to_owned(),
+    ];
+
+    if detected_count == 0 {
+        warnings.push("No checksum or large-send offload adapter property was exposed.".to_owned());
+    }
+
+    advanced_plan_item(AdvancedPlanItemInput {
+        tweak_id: NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID,
+        action: PlanAction::DetectOnly,
+        mode: TweakMode::Safe,
+        risk: TweakRisk::Low,
+        changes: Vec::new(),
+        rollback_kind: RollbackKind::NotNeededReadonly,
+        requires_admin: false,
+        warnings,
+    })
+}
+
+fn interrupt_moderation_lab_item(request: &NetworkAdvancedTuningPlanRequest) -> TweakPlanItem {
+    advanced_lab_item(
+        AdvancedLabItemInput {
+            tweak_id: NET_INTERRUPT_MODERATION_LAB_TWEAK_ID,
+            kind: AdvancedNetworkPropertyKind::InterruptModeration,
+            desired_value: DESIRED_ADVANCED_DISABLED_STATE,
+            consent: request.interrupt_moderation_consent,
+            summary: "Interrupt moderation",
+            no_support_warning: "No exact interrupt moderation adapter property was exposed.",
+            issue_context_required: false,
+        },
+        request,
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AdvancedNetworkPropertyKind {
+    Rss,
+    Rsc,
+    Offload,
+    InterruptModeration,
+}
+
+#[derive(Clone, Copy)]
+struct AdvancedLabItemInput<'a> {
+    tweak_id: &'a str,
+    kind: AdvancedNetworkPropertyKind,
+    desired_value: &'a str,
+    consent: NetworkControlConsent,
+    summary: &'a str,
+    no_support_warning: &'a str,
+    issue_context_required: bool,
+}
+
+fn advanced_lab_item(
+    input: AdvancedLabItemInput<'_>,
+    request: &NetworkAdvancedTuningPlanRequest,
+) -> TweakPlanItem {
+    let changes = advanced_property_changes(&request.adapters, input.kind, input.desired_value);
+    let warnings = advanced_lab_warnings(
+        request,
+        input.consent,
+        input.summary,
+        changes.is_empty(),
+        input.no_support_warning,
+        input.issue_context_required,
+    );
+    let action = advanced_lab_action(
+        request,
+        input.consent,
+        changes.is_empty(),
+        input.issue_context_required,
+    );
+
+    advanced_plan_item(AdvancedPlanItemInput {
+        tweak_id: input.tweak_id,
+        action,
+        mode: TweakMode::Lab,
+        risk: TweakRisk::High,
+        changes,
+        rollback_kind: RollbackKind::ExactValue,
+        requires_admin: true,
+        warnings,
+    })
+}
+
+fn advanced_lab_action(
+    request: &NetworkAdvancedTuningPlanRequest,
+    consent: NetworkControlConsent,
+    no_changes: bool,
+    issue_context_required: bool,
+) -> PlanAction {
+    if no_changes {
+        return PlanAction::DetectOnly;
+    }
+
+    if request.requested_mode != TweakMode::Lab
+        || !consent.is_granted()
+        || !request.baseline_benchmark_captured
+        || !request.adapter_restart_accepted
+        || (issue_context_required && !request.diagnostic_issue_confirmed)
+    {
+        PlanAction::Recommend
+    } else {
+        PlanAction::Apply
+    }
+}
+
+fn advanced_lab_warnings(
+    request: &NetworkAdvancedTuningPlanRequest,
+    consent: NetworkControlConsent,
+    summary: &str,
+    no_changes: bool,
+    no_support_warning: &str,
+    issue_context_required: bool,
+) -> Vec<String> {
+    let mut warnings = vec![
+        format!("{summary} is Lab-only and requires explicit consent."),
+        ADVANCED_NETWORK_BENCHMARK_WARNING.to_owned(),
+        ADVANCED_NETWORK_RESTART_WARNING.to_owned(),
+        "Advanced NIC changes are adapter-specific; wildcard writes and viral TCP packs are not \
+         allowed."
+            .to_owned(),
+        "No game files, memory, BattlEye files, or anti-cheat processes are modified.".to_owned(),
+    ];
+
+    if request.requested_mode != TweakMode::Lab {
+        warnings.push("Advanced NIC tuning stays off in Safe/default planning.".to_owned());
+    }
+
+    if !consent.is_granted() {
+        warnings.push(format!("{summary} consent has not been granted."));
+    }
+
+    if !request.baseline_benchmark_captured {
+        warnings.push(
+            "Capture a baseline benchmark before applying this network tweak.".to_owned(),
+        );
+    }
+
+    if !request.adapter_restart_accepted {
+        warnings.push("Adapter restart risk has not been accepted.".to_owned());
+    }
+
+    if issue_context_required && !request.diagnostic_issue_confirmed {
+        warnings.push(
+            "VPN, capture-tool, or adapter-driver issue context is required before offload \
+             diagnostics."
+                .to_owned(),
+        );
+    }
+
+    if no_changes {
+        warnings.push(no_support_warning.to_owned());
+    }
+
+    warnings
+}
+
+fn advanced_property_changes(
+    adapters: &[NetworkAdapterInspection],
+    kind: AdvancedNetworkPropertyKind,
+    desired_value: &str,
+) -> Vec<PlannedChange> {
+    adapters
+        .iter()
+        .flat_map(|adapter| {
+            adapter
+                .advanced_properties
+                .iter()
+                .filter(move |property| advanced_property_kind(property) == Some(kind))
+                .filter(move |property| property_needs_advanced_change(property, desired_value))
+                .filter_map(move |property| {
+                    network_adapter_advanced_property_target(&adapter.adapter_id, property).map(
+                        |target| PlannedChange {
+                            target,
+                            operation: TweakOperationKind::Write,
+                            previous_value: property.current_value.clone(),
+                            desired_value: Some(desired_value.to_owned()),
+                            scope: SessionScope::Persistent,
+                        },
+                    )
+                })
+        })
+        .collect()
+}
+
+fn property_needs_advanced_change(
+    property: &NetworkAdapterAdvancedProperty,
+    desired_value: &str,
+) -> bool {
+    let Some(current_value) = property.current_value.as_deref() else {
+        return false;
+    };
+
+    if is_disabled_value(desired_value) {
+        !is_disabled_value(current_value)
+    } else if is_enabled_value(desired_value) {
+        !is_enabled_value(current_value)
+    } else {
+        normalized(current_value) != normalized(desired_value)
+    }
+}
+
+struct AdvancedPlanItemInput {
+    tweak_id: &'static str,
+    action: PlanAction,
+    mode: TweakMode,
+    risk: TweakRisk,
+    changes: Vec<PlannedChange>,
+    rollback_kind: RollbackKind,
+    requires_admin: bool,
+    warnings: Vec<String>,
+}
+
+fn advanced_plan_item(input: AdvancedPlanItemInput) -> TweakPlanItem {
+    let backup = backup_requirement(input.action, input.rollback_kind, &input.changes);
+    let rollback = rollback_plan(
+        input.action,
+        input.rollback_kind,
+        &input.changes,
+        input.requires_admin,
+    );
+
+    TweakPlanItem {
+        tweak_id: input.tweak_id.to_owned(),
+        category: TweakCategory::Network,
+        action: input.action,
+        mode: input.mode,
+        risk: input.risk,
+        changes: input.changes,
+        backup,
+        rollback,
+        reboot: RebootPolicy::None,
+        requires_admin: input.requires_admin,
+        warnings: input.warnings,
+    }
+}
+
 fn adapter_power_saving_mode(device_class: DevicePowerClass) -> (TweakMode, TweakRisk) {
     if device_class == DevicePowerClass::Laptop {
         (TweakMode::Competitive, TweakRisk::Medium)
@@ -427,8 +930,8 @@ fn plan_item(
     requires_admin: bool,
     warnings: Vec<String>,
 ) -> TweakPlanItem {
-    let backup = backup_requirement(action, &changes);
-    let rollback = rollback_plan(action, &changes, requires_admin);
+    let backup = backup_requirement(action, RollbackKind::ExactValue, &changes);
+    let rollback = rollback_plan(action, RollbackKind::ExactValue, &changes, requires_admin);
 
     TweakPlanItem {
         tweak_id: tweak_id.to_owned(),
@@ -445,10 +948,14 @@ fn plan_item(
     }
 }
 
-fn backup_requirement(action: PlanAction, changes: &[PlannedChange]) -> BackupRequirement {
-    if action == PlanAction::Apply && !changes.is_empty() {
+fn backup_requirement(
+    action: PlanAction,
+    rollback_kind: RollbackKind,
+    changes: &[PlannedChange],
+) -> BackupRequirement {
+    if action == PlanAction::Apply && rollback_kind.needs_backup_before_apply() {
         BackupRequirement::Required {
-            kind: RollbackKind::ExactValue,
+            kind: rollback_kind,
             target: changes
                 .first()
                 .map_or_else(String::new, |change| change.target.clone()),
@@ -460,6 +967,7 @@ fn backup_requirement(action: PlanAction, changes: &[PlannedChange]) -> BackupRe
 
 fn rollback_plan(
     action: PlanAction,
+    rollback_kind: RollbackKind,
     changes: &[PlannedChange],
     requires_admin: bool,
 ) -> RollbackPlan {
@@ -468,7 +976,7 @@ fn rollback_plan(
     }
 
     RollbackPlan {
-        kind: RollbackKind::ExactValue,
+        kind: rollback_kind,
         steps: changes
             .iter()
             .map(|change| RollbackStep {
@@ -503,6 +1011,16 @@ fn is_adapter_eee_property_target(target: &str) -> bool {
         })
 }
 
+fn advanced_property_kind_from_target(target: &str) -> Option<AdvancedNetworkPropertyKind> {
+    if !adapter_segment_is_specific(target) {
+        return None;
+    }
+
+    target
+        .rsplit_once(ADVANCED_PROPERTY_PREFIX)
+        .and_then(|(_, property)| advanced_property_kind_from_slug(property))
+}
+
 fn adapter_segment_is_specific(target: &str) -> bool {
     target
         .strip_prefix(NETWORK_ADAPTER_TARGET_PREFIX)
@@ -520,10 +1038,56 @@ fn eee_property_slug(display_name: &str) -> Option<String> {
     }
 }
 
+fn advanced_property_kind(
+    property: &NetworkAdapterAdvancedProperty,
+) -> Option<AdvancedNetworkPropertyKind> {
+    property
+        .registry_keyword
+        .as_deref()
+        .and_then(advanced_property_kind_from_slug)
+        .or_else(|| advanced_property_kind_from_slug(&property.display_name))
+}
+
+fn advanced_property_kind_from_slug(value: &str) -> Option<AdvancedNetworkPropertyKind> {
+    let value = normalized(value);
+
+    if matches!(value.as_str(), "rss" | "receivesidescaling") {
+        return Some(AdvancedNetworkPropertyKind::Rss);
+    }
+
+    if matches!(value.as_str(), "rsc" | "receivesegmentcoalescing")
+        || value.contains("receivesegmentcoalescing")
+        || value.contains("recvsegmentcoalescing")
+    {
+        return Some(AdvancedNetworkPropertyKind::Rsc);
+    }
+
+    if value.contains("offload")
+        || value.contains("largesend")
+        || value.contains("lso")
+        || value.contains("checksum")
+    {
+        return Some(AdvancedNetworkPropertyKind::Offload);
+    }
+
+    if value.contains("interruptmoderation") {
+        return Some(AdvancedNetworkPropertyKind::InterruptModeration);
+    }
+
+    None
+}
+
 fn is_disabled_value(value: &str) -> bool {
     matches!(
         normalized(value).as_str(),
         "disabled" | "disable" | "off" | "false" | "0" | "none"
+    )
+}
+
+fn is_enabled_value(value: &str) -> bool {
+    matches!(
+        normalized(value).as_str(),
+        "enabled" | "enable" | "on" | "true" | "1"
     )
 }
 
@@ -579,6 +1143,30 @@ mod tests {
             NetworkAdapterAdvancedProperty::new("Receive Side Scaling")
                 .with_registry_keyword("*RSS")
                 .with_current_value("Enabled"),
+        ];
+        adapter
+    }
+
+    fn advanced_adapter() -> NetworkAdapterInspection {
+        let mut adapter =
+            NetworkAdapterInspection::new("Ethernet", "Realtek Gaming 2.5GbE Family Controller");
+        adapter.adapter_type = Some("Ethernet 802.3".to_owned());
+        adapter.advanced_properties = vec![
+            NetworkAdapterAdvancedProperty::new("Receive Side Scaling")
+                .with_registry_keyword("*RSS")
+                .with_current_value("Disabled"),
+            NetworkAdapterAdvancedProperty::new("Receive Segment Coalescing")
+                .with_registry_keyword("*RSC")
+                .with_current_value("Enabled"),
+            NetworkAdapterAdvancedProperty::new("Large Send Offload v2 (IPv4)")
+                .with_registry_keyword("*LsoV2IPv4")
+                .with_current_value("Enabled"),
+            NetworkAdapterAdvancedProperty::new("Interrupt Moderation")
+                .with_registry_keyword("*InterruptModeration")
+                .with_current_value("Enabled"),
+            NetworkAdapterAdvancedProperty::new("Jumbo Packet")
+                .with_registry_keyword("*JumboPacket")
+                .with_current_value("1514 Bytes"),
         ];
         adapter
     }
@@ -679,5 +1267,115 @@ mod tests {
         assert_eq!(item.action, PlanAction::DetectOnly);
         assert!(item.changes.is_empty());
         assert!(network_plan_uses_only_adapter_specific_targets(&plan));
+    }
+
+    #[test]
+    fn advanced_network_tuning_stays_conservative_by_default() {
+        let mut request = NetworkAdvancedTuningPlanRequest::new("plan-advanced-safe");
+        request.adapters = vec![advanced_adapter()];
+
+        let plan = build_network_advanced_tuning_plan(&request);
+        let rss = item(&plan, NET_RSS_ENSURE_TWEAK_ID);
+        let offloads = item(&plan, NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID);
+
+        assert!(!plan.has_apply_items());
+        assert!(network_advanced_plan_is_not_safe_default(&plan));
+        assert_eq!(rss.action, PlanAction::Recommend);
+        assert_eq!(rss.mode, TweakMode::Lab);
+        assert_eq!(rss.backup, BackupRequirement::NotRequired);
+        assert_eq!(offloads.action, PlanAction::DetectOnly);
+        assert_eq!(offloads.mode, TweakMode::Safe);
+        assert!(plan
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("Safe/default")));
+    }
+
+    #[test]
+    fn advanced_network_tuning_requires_lab_consent_and_benchmark() {
+        let mut request = NetworkAdvancedTuningPlanRequest::new("plan-advanced-lab");
+        request.requested_mode = TweakMode::Lab;
+        request.adapters = vec![advanced_adapter()];
+
+        let no_consent_plan = build_network_advanced_tuning_plan(&request);
+        assert_eq!(
+            item(&no_consent_plan, NET_RSC_PROFILE_TWEAK_ID).action,
+            PlanAction::Recommend
+        );
+
+        request.rss_consent = NetworkControlConsent::Granted;
+        request.rsc_consent = NetworkControlConsent::Granted;
+        request.offload_diagnostics_consent = NetworkControlConsent::Granted;
+        request.interrupt_moderation_consent = NetworkControlConsent::Granted;
+        request.diagnostic_issue_confirmed = true;
+        let no_baseline_plan = build_network_advanced_tuning_plan(&request);
+        assert_eq!(
+            item(&no_baseline_plan, NET_INTERRUPT_MODERATION_LAB_TWEAK_ID).action,
+            PlanAction::Recommend
+        );
+
+        request.baseline_benchmark_captured = true;
+        request.adapter_restart_accepted = true;
+        let apply_plan = build_network_advanced_tuning_plan(&request);
+        let rss = item(&apply_plan, NET_RSS_ENSURE_TWEAK_ID);
+        let rsc = item(&apply_plan, NET_RSC_PROFILE_TWEAK_ID);
+        let offload = item(&apply_plan, NET_RSC_VPN_DIAGNOSIS_TWEAK_ID);
+        let interrupt = item(&apply_plan, NET_INTERRUPT_MODERATION_LAB_TWEAK_ID);
+
+        assert_eq!(rss.action, PlanAction::Apply);
+        assert_eq!(rsc.action, PlanAction::Apply);
+        assert_eq!(offload.action, PlanAction::Apply);
+        assert_eq!(interrupt.action, PlanAction::Apply);
+        assert_eq!(
+            rss.backup,
+            BackupRequirement::Required {
+                kind: RollbackKind::ExactValue,
+                target: "netadapter:ethernet/advanced/receive-side-scaling".to_owned(),
+            }
+        );
+        assert_eq!(rss.changes[0].desired_value.as_deref(), Some("Enabled"));
+        assert!(rsc.changes[0]
+            .target
+            .ends_with("/advanced/receive-segment-coalescing"));
+        assert!(offload.changes[0]
+            .target
+            .ends_with("/advanced/large-send-offload-v2-ipv4"));
+        assert!(interrupt.changes[0]
+            .target
+            .ends_with("/advanced/interrupt-moderation"));
+        assert!(network_advanced_apply_requires_lab_consent_and_benchmark(
+            &apply_plan
+        ));
+    }
+
+    #[test]
+    fn advanced_network_targets_are_adapter_specific_and_allowlisted() {
+        let mut request = NetworkAdvancedTuningPlanRequest::new("plan-advanced-targets");
+        request.requested_mode = TweakMode::Lab;
+        request.rss_consent = NetworkControlConsent::Granted;
+        request.rsc_consent = NetworkControlConsent::Granted;
+        request.offload_diagnostics_consent = NetworkControlConsent::Granted;
+        request.interrupt_moderation_consent = NetworkControlConsent::Granted;
+        request.baseline_benchmark_captured = true;
+        request.adapter_restart_accepted = true;
+        request.diagnostic_issue_confirmed = true;
+        request.adapters = vec![advanced_adapter()];
+
+        let plan = build_network_advanced_tuning_plan(&request);
+
+        assert!(plan
+            .items
+            .iter()
+            .flat_map(|item| item.changes.iter().map(move |change| (&item.tweak_id, change)))
+            .all(|(tweak_id, change)| network_advanced_tweak_targets_property(
+                tweak_id,
+                &change.target
+            )));
+        assert!(!is_network_advanced_tuning_target(
+            "netadapter:*/advanced/interrupt-moderation"
+        ));
+        assert!(!is_network_advanced_tuning_target(
+            "netadapter:ethernet/advanced/jumbo-packet"
+        ));
     }
 }

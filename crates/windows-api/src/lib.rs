@@ -42,9 +42,11 @@ pub use graphics::{
     GraphicsSettingsError, GraphicsSettingsErrorReason, GraphicsSettingsSummary,
 };
 pub use network::{
-    apply_network_adapter_power_plan_to_fixture,
+    apply_network_adapter_power_plan_to_fixture, apply_network_advanced_tuning_plan_to_fixture,
     build_consented_network_adapter_power_plan_from_scan,
-    build_network_adapter_power_plan_from_scan, verify_network_adapter_power_plan_fixture,
+    build_consented_network_advanced_tuning_plan_from_scan,
+    build_network_adapter_power_plan_from_scan, build_network_advanced_tuning_plan_from_scan,
+    verify_network_adapter_power_plan_fixture, verify_network_advanced_tuning_plan_fixture,
     NetworkAdapterSettingsError, NetworkAdapterSettingsErrorReason, NetworkAdapterSettingsSummary,
 };
 pub use power::{

@@ -157,9 +157,33 @@
         },
         {
           "displayName": "Receive Side Scaling",
-          "displayValue": "Enabled",
+          "displayValue": "Disabled",
           "registryKeyword": "*RSS",
+          "registryValue": "0"
+        },
+        {
+          "displayName": "Receive Segment Coalescing",
+          "displayValue": "Enabled",
+          "registryKeyword": "*RSC",
           "registryValue": "1"
+        },
+        {
+          "displayName": "Large Send Offload v2 (IPv4)",
+          "displayValue": "Enabled",
+          "registryKeyword": "*LsoV2IPv4",
+          "registryValue": "1"
+        },
+        {
+          "displayName": "Interrupt Moderation",
+          "displayValue": "Enabled",
+          "registryKeyword": "*InterruptModeration",
+          "registryValue": "1"
+        },
+        {
+          "displayName": "Jumbo Packet",
+          "displayValue": "1514 Bytes",
+          "registryKeyword": "*JumboPacket",
+          "registryValue": "1514"
         }
       ]
     }
