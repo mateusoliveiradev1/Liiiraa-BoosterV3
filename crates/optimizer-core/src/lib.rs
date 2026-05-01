@@ -1,6 +1,7 @@
 //! Pure tweak planning, policy, validation, and risk modeling.
 
 pub mod backup;
+pub mod background_work;
 pub mod catalog;
 pub mod gaming_capture;
 pub mod ipc;

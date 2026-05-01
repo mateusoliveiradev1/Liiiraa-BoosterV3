@@ -1,12 +1,16 @@
 //! Windows implementation adapters for registry, power, services, and devices.
 
 pub mod backup;
+pub mod background_work;
 pub mod command;
 pub mod gaming;
 pub mod power;
 pub mod scan;
 
 pub use backup::WindowsRollbackFixture;
+pub use background_work::{
+    background_work_plan_is_recommendation_only, build_background_work_plan_from_scan,
+};
 pub use command::{
     FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
 };
@@ -23,11 +27,12 @@ pub use power::{
     WINDOWS_BALANCED_SCHEME_GUID, WINDOWS_HIGH_PERFORMANCE_SCHEME_GUID,
 };
 pub use scan::{
-    parse_system_scan_report, scan_system, CpuScanItem, DefenderScan, GpuScanItem,
-    MemoryModuleScanItem, MemoryScan, NetworkAdapterScanItem, OsScan, PhysicalDiskScanItem,
-    PowerPlanScan, RebootRequiredScan, ScheduledTaskScanItem, SecurityScan, ServiceScanItem,
-    StartupAppScanItem, StorageScan, StorageVolumeScanItem, SystemScanError,
-    SystemScanErrorReason, SystemScanMode, SystemScanReport, WindowsSystemScanner,
+    parse_system_scan_report, scan_system, BackgroundAppScanItem, CpuScanItem, DefenderScan,
+    GpuScanItem, MemoryModuleScanItem, MemoryScan, NetworkAdapterScanItem, OsScan,
+    PhysicalDiskScanItem, PowerPlanScan, RebootRequiredScan, ScheduledTaskScanItem,
+    SecurityScan, ServiceScanItem, StartupAppScanItem, StorageScan, StorageVolumeScanItem,
+    SystemScanError, SystemScanErrorReason, SystemScanMode, SystemScanReport,
+    WindowsSystemScanner,
 };
 
 /// Static metadata describing this workspace crate.

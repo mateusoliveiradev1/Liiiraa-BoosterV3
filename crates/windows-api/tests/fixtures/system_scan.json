@@ -101,7 +101,19 @@
       "name": "Discord",
       "command": "C:\\Users\\Liiiraa\\AppData\\Local\\Discord\\Update.exe --processStart Discord.exe",
       "location": "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-      "user": "DESKTOP\\Liiiraa"
+      "user": "DESKTOP\\Liiiraa",
+      "enabled": true,
+      "startupImpact": "high"
+    }
+  ],
+  "backgroundApps": [
+    {
+      "appId": "Microsoft.BingWeather",
+      "displayName": "Weather",
+      "enabled": true,
+      "disabled": false,
+      "disabledByUser": false,
+      "activity": "high"
     }
   ],
   "power": {

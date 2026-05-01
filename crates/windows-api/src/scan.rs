@@ -158,8 +158,31 @@ $startupApps = @(Invoke-ScanSection "startup_apps" {
             command = if ($null -eq $_.Command) { $null } else { [string]$_.Command }
             location = if ($null -eq $_.Location) { $null } else { [string]$_.Location }
             user = if ($null -eq $_.User) { $null } else { [string]$_.User }
+            enabled = $null
+            startupImpact = $null
         }
     })
+} @())
+
+$backgroundApps = @(Invoke-ScanSection "background_apps" {
+    $root = "HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications"
+    if (Test-Path $root) {
+        @(Get-ChildItem -Path $root | ForEach-Object {
+            $props = Get-ItemProperty -Path $_.PSPath
+            $disabled = if ($null -eq $props.Disabled) { $null } else { [bool]$props.Disabled }
+            $disabledByUser = if ($null -eq $props.DisabledByUser) { $null } else { [bool]$props.DisabledByUser }
+            [ordered]@{
+                appId = [string]$_.PSChildName
+                displayName = if ($null -eq $props.DisplayName) { $null } else { [string]$props.DisplayName }
+                enabled = if ($null -eq $disabled -and $null -eq $disabledByUser) { $null } else { -not (($disabled -eq $true) -or ($disabledByUser -eq $true)) }
+                disabled = $disabled
+                disabledByUser = $disabledByUser
+                activity = $null
+            }
+        })
+    } else {
+        @()
+    }
 } @())
 
 $power = Invoke-ScanSection "power.active_plan" {
@@ -261,6 +284,7 @@ $rebootRequired = [ordered]@{
     services = $services
     scheduledTasks = $scheduledTasks
     startupApps = $startupApps
+    backgroundApps = $backgroundApps
     power = $power
     security = [ordered]@{
         deviceGuard = $deviceGuard
@@ -327,6 +351,9 @@ pub struct SystemScanReport {
     pub scheduled_tasks: Vec<ScheduledTaskScanItem>,
     /// Startup app inventory.
     pub startup_apps: Vec<StartupAppScanItem>,
+    /// Background app permission/activity inventory.
+    #[serde(default)]
+    pub background_apps: Vec<BackgroundAppScanItem>,
     /// Active power plan inventory.
     pub power: PowerPlanScan,
     /// VBS, HVCI, and Defender read-only state.
@@ -549,6 +576,28 @@ pub struct StartupAppScanItem {
     pub location: Option<String>,
     /// Owning user when reported by Windows.
     pub user: Option<String>,
+    /// Whether Windows reports the entry as enabled.
+    pub enabled: Option<bool>,
+    /// Startup impact text when Windows exposes it.
+    pub startup_impact: Option<String>,
+}
+
+/// Background app permission/activity inventory item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackgroundAppScanItem {
+    /// Package, app, or registry identifier.
+    pub app_id: String,
+    /// Friendly display name when exposed.
+    pub display_name: Option<String>,
+    /// Whether background permission appears enabled.
+    pub enabled: Option<bool>,
+    /// Raw Disabled value from Windows background app settings.
+    pub disabled: Option<bool>,
+    /// Raw DisabledByUser value from Windows background app settings.
+    pub disabled_by_user: Option<bool>,
+    /// Activity/impact text when supplied by fixtures or future collectors.
+    pub activity: Option<String>,
 }
 
 /// Active power plan inventory.
