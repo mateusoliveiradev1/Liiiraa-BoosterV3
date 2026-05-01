@@ -10,6 +10,7 @@ pub mod network;
 pub mod planning;
 pub mod power_plan;
 pub mod protected_storage;
+pub mod scheduler;
 pub mod security_tradeoff;
 pub mod storage;
 pub mod tweak_contracts;

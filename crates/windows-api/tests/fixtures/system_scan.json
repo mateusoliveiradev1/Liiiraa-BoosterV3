@@ -201,6 +201,11 @@
     "activeSchemeName": "Balanced",
     "source": "powercfg /getactivescheme"
   },
+  "scheduler": {
+    "mmcssSystemResponsiveness": 20,
+    "win32PrioritySeparation": 2,
+    "source": "fixture HKLM scheduler registry"
+  },
   "security": {
     "deviceGuard": {
       "virtualizationBasedSecurityStatus": 2,

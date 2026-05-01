@@ -402,6 +402,22 @@ $power = Invoke-ScanSection "power.active_plan" {
     source = "powercfg /getactivescheme"
 })
 
+$scheduler = Invoke-ScanSection "scheduler.registry" {
+    $mmcssPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
+    $priorityPath = "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl"
+    $mmcssProps = Get-ItemProperty -Path $mmcssPath -ErrorAction SilentlyContinue
+    $priorityProps = Get-ItemProperty -Path $priorityPath -ErrorAction SilentlyContinue
+    [ordered]@{
+        mmcssSystemResponsiveness = Convert-NullableUInt32 (Get-PropertyValue $mmcssProps "SystemResponsiveness")
+        win32PrioritySeparation = Convert-NullableUInt32 (Get-PropertyValue $priorityProps "Win32PrioritySeparation")
+        source = "HKLM scheduler registry"
+    }
+} ([ordered]@{
+    mmcssSystemResponsiveness = $null
+    win32PrioritySeparation = $null
+    source = "HKLM scheduler registry"
+})
+
 $deviceGuard = Invoke-ScanSection "security.device_guard" {
     $dg = Get-CimInstance -Namespace "root\Microsoft\Windows\DeviceGuard" -ClassName Win32_DeviceGuard
     [ordered]@{
@@ -515,6 +531,7 @@ $rebootRequired = [ordered]@{
     startupApps = $startupApps
     backgroundApps = $backgroundApps
     power = $power
+    scheduler = $scheduler
     security = [ordered]@{
         deviceGuard = $deviceGuard
         hvci = $hvci
@@ -586,6 +603,9 @@ pub struct SystemScanReport {
     pub background_apps: Vec<BackgroundAppScanItem>,
     /// Active power plan inventory.
     pub power: PowerPlanScan,
+    /// Scheduler registry state used by Competitive scheduler planning.
+    #[serde(default)]
+    pub scheduler: SchedulerRegistryScan,
     /// VBS, HVCI, VMP, Hyper-V, and Defender read-only state.
     pub security: SecurityScan,
     /// Reboot-required markers.
@@ -973,6 +993,28 @@ pub struct PowerPlanScan {
     pub source: String,
 }
 
+/// Read-only scheduler registry state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SchedulerRegistryScan {
+    /// MMCSS `SystemResponsiveness` DWORD.
+    pub mmcss_system_responsiveness: Option<u32>,
+    /// `Win32PrioritySeparation` DWORD.
+    pub win32_priority_separation: Option<u32>,
+    /// Read-only source used for this scheduler scan.
+    pub source: String,
+}
+
+impl Default for SchedulerRegistryScan {
+    fn default() -> Self {
+        Self {
+            mmcss_system_responsiveness: None,
+            win32_priority_separation: None,
+            source: "unavailable".to_owned(),
+        }
+    }
+}
+
 /// Security state inventory.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1204,6 +1246,8 @@ mod tests {
 
         assert!(report.covers_t040_inventory());
         assert_eq!(report.security.hvci.enabled, Some(1));
+        assert_eq!(report.scheduler.mmcss_system_responsiveness, Some(20));
+        assert_eq!(report.scheduler.win32_priority_separation, Some(2));
         assert!(!report.reboot_required.is_reboot_required());
         assert!(report.collection_errors.is_empty());
     }
