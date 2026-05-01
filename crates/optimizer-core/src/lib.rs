@@ -4,6 +4,7 @@ pub mod backup;
 pub mod ipc;
 pub mod catalog;
 pub mod planning;
+pub mod power_plan;
 pub mod protected_storage;
 pub mod tweak_contracts;
 

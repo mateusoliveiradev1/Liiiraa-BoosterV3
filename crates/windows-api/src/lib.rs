@@ -2,11 +2,19 @@
 
 pub mod backup;
 pub mod command;
+pub mod power;
 pub mod scan;
 
 pub use backup::WindowsRollbackFixture;
 pub use command::{
     FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
+};
+pub use power::{
+    active_power_scheme_matches, build_liiiraa_powercfg_plan, parse_active_power_scheme_guid,
+    LiiiraaPowerCfgApplyPlan, LiiiraaPowerCfgRollbackPlan, LiiiraaPowerPlanApplyRequest,
+    PowerPlanApplyError, PowerPlanApplyErrorReason, LIIIRAA_BALANCED_SCHEME_GUID,
+    LIIIRAA_COMPETITIVE_SCHEME_GUID, LIIIRAA_PERFORMANCE_SCHEME_GUID,
+    WINDOWS_BALANCED_SCHEME_GUID, WINDOWS_HIGH_PERFORMANCE_SCHEME_GUID,
 };
 pub use scan::{
     parse_system_scan_report, scan_system, CpuScanItem, DefenderScan, GpuScanItem,

@@ -110,6 +110,81 @@ impl StructuredCommandPlan {
         Self::new(FixedWindowsExecutable::PowerCfg, ["/getactivescheme"])
     }
 
+    /// Builds the fixed command plan for duplicating a Windows power scheme.
+    pub fn powercfg_duplicate_scheme(
+        source_scheme_guid: &str,
+        destination_scheme_guid: &str,
+    ) -> Result<Self, WindowsCommandPlanError> {
+        Self::new(
+            FixedWindowsExecutable::PowerCfg,
+            [
+                "/duplicatescheme".to_owned(),
+                source_scheme_guid.to_owned(),
+                destination_scheme_guid.to_owned(),
+            ],
+        )
+    }
+
+    /// Builds the fixed command plan for naming a prepared power scheme.
+    pub fn powercfg_change_scheme_name(
+        scheme_guid: &str,
+        name: &str,
+    ) -> Result<Self, WindowsCommandPlanError> {
+        Self::new(
+            FixedWindowsExecutable::PowerCfg,
+            [
+                "/changename".to_owned(),
+                scheme_guid.to_owned(),
+                name.to_owned(),
+            ],
+        )
+    }
+
+    /// Builds the fixed command plan for changing an AC power setting value.
+    pub fn powercfg_set_ac_value_index(
+        scheme_guid: &str,
+        subgroup: &str,
+        setting: &str,
+        value: u32,
+    ) -> Result<Self, WindowsCommandPlanError> {
+        Self::new(
+            FixedWindowsExecutable::PowerCfg,
+            [
+                "/setacvalueindex".to_owned(),
+                scheme_guid.to_owned(),
+                subgroup.to_owned(),
+                setting.to_owned(),
+                value.to_string(),
+            ],
+        )
+    }
+
+    /// Builds the fixed command plan for changing a DC power setting value.
+    pub fn powercfg_set_dc_value_index(
+        scheme_guid: &str,
+        subgroup: &str,
+        setting: &str,
+        value: u32,
+    ) -> Result<Self, WindowsCommandPlanError> {
+        Self::new(
+            FixedWindowsExecutable::PowerCfg,
+            [
+                "/setdcvalueindex".to_owned(),
+                scheme_guid.to_owned(),
+                subgroup.to_owned(),
+                setting.to_owned(),
+                value.to_string(),
+            ],
+        )
+    }
+
+    /// Builds the fixed command plan for deleting an optimizer-created scheme.
+    pub fn powercfg_delete_scheme(
+        scheme_guid: &str,
+    ) -> Result<Self, WindowsCommandPlanError> {
+        Self::new(FixedWindowsExecutable::PowerCfg, ["/delete", scheme_guid])
+    }
+
     /// Returns the fixed executable.
     #[must_use]
     pub const fn executable(&self) -> FixedWindowsExecutable {
@@ -182,6 +257,33 @@ mod tests {
         );
         assert_eq!(plan.arguments()[0].as_str(), "/setactive");
         assert_eq!(plan.arguments()[1].as_str(), TEST_SCHEME_GUID);
+    }
+
+    #[test]
+    fn powercfg_plan_supports_scheme_creation_and_setting_values() {
+        let duplicate = StructuredCommandPlan::powercfg_duplicate_scheme(
+            TEST_SCHEME_GUID,
+            "c71d8a73-f26c-4ef8-b578-53d5c0a2b701",
+        )
+        .expect("duplicate scheme plan should be valid");
+        let rename = StructuredCommandPlan::powercfg_change_scheme_name(
+            "c71d8a73-f26c-4ef8-b578-53d5c0a2b701",
+            "Liiiraa Boost - Performance",
+        )
+        .expect("scheme name with spaces should be valid");
+        let setting = StructuredCommandPlan::powercfg_set_ac_value_index(
+            "c71d8a73-f26c-4ef8-b578-53d5c0a2b701",
+            "SUB_USB",
+            "USBSELECTIVE",
+            0,
+        )
+        .expect("AC setting plan should be valid");
+
+        assert_eq!(duplicate.arguments()[0].as_str(), "/duplicatescheme");
+        assert_eq!(rename.arguments()[0].as_str(), "/changename");
+        assert_eq!(rename.arguments()[2].as_str(), "Liiiraa Boost - Performance");
+        assert_eq!(setting.arguments()[0].as_str(), "/setacvalueindex");
+        assert_eq!(setting.arguments()[4].as_str(), "0");
     }
 
     #[test]
