@@ -13,6 +13,12 @@ fn fixture_covers_t040_inventory_sections() {
         Some("381b4222-f694-41f0-9685-ff5bb260df2e")
     );
     assert_eq!(report.security.hvci.enabled, Some(1));
+    assert!(report
+        .security
+        .optional_features
+        .iter()
+        .any(|feature| feature.name == "VirtualMachinePlatform"
+            && feature.install_state == Some(1)));
     assert_eq!(report.storage.storage_sense.enabled, Some(false));
     assert_eq!(report.storage.trim.ntfs_disable_delete_notify, Some(0));
     assert_eq!(report.storage.direct_storage.nvme_present, Some(true));

@@ -213,6 +213,28 @@
       "enabled": 1,
       "locked": 0
     },
+    "optionalFeatures": [
+      {
+        "name": "VirtualMachinePlatform",
+        "caption": "Virtual Machine Platform",
+        "installState": 1
+      },
+      {
+        "name": "Microsoft-Hyper-V-All",
+        "caption": "Hyper-V",
+        "installState": 2
+      },
+      {
+        "name": "Microsoft-Windows-Subsystem-Linux",
+        "caption": "Windows Subsystem for Linux",
+        "installState": 2
+      },
+      {
+        "name": "HypervisorPlatform",
+        "caption": "Windows Hypervisor Platform",
+        "installState": 2
+      }
+    ],
     "defender": {
       "antivirusEnabled": true,
       "realTimeProtectionEnabled": true,

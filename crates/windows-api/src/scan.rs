@@ -431,6 +431,25 @@ $hvci = Invoke-ScanSection "security.hvci" {
     locked = $null
 })
 
+$optionalFeatures = @(Invoke-ScanSection "security.optional_features" {
+    $featureNames = @(
+        "VirtualMachinePlatform"
+        "Microsoft-Hyper-V-All"
+        "Microsoft-Windows-Subsystem-Linux"
+        "HypervisorPlatform"
+    )
+
+    @(Get-CimInstance -ClassName Win32_OptionalFeature | Where-Object {
+        $featureNames -contains $_.Name
+    } | ForEach-Object {
+        [ordered]@{
+            name = [string]$_.Name
+            caption = if ($null -eq $_.Caption) { $null } else { [string]$_.Caption }
+            installState = Convert-NullableUInt32 $_.InstallState
+        }
+    })
+} @())
+
 $defender = Invoke-ScanSection "security.defender" {
     $status = Get-MpComputerStatus
     $prefs = $null
@@ -499,6 +518,7 @@ $rebootRequired = [ordered]@{
     security = [ordered]@{
         deviceGuard = $deviceGuard
         hvci = $hvci
+        optionalFeatures = $optionalFeatures
         defender = $defender
     }
     rebootRequired = $rebootRequired
@@ -566,7 +586,7 @@ pub struct SystemScanReport {
     pub background_apps: Vec<BackgroundAppScanItem>,
     /// Active power plan inventory.
     pub power: PowerPlanScan,
-    /// VBS, HVCI, and Defender read-only state.
+    /// VBS, HVCI, VMP, Hyper-V, and Defender read-only state.
     pub security: SecurityScan,
     /// Reboot-required markers.
     pub reboot_required: RebootRequiredScan,
@@ -961,6 +981,9 @@ pub struct SecurityScan {
     pub device_guard: DeviceGuardScan,
     /// HVCI registry state.
     pub hvci: HvciScan,
+    /// Windows optional features relevant to virtualization tradeoffs.
+    #[serde(default)]
+    pub optional_features: Vec<WindowsOptionalFeatureScanItem>,
     /// Defender read-only state.
     pub defender: DefenderScan,
 }
@@ -989,6 +1012,18 @@ pub struct HvciScan {
     pub enabled: Option<u32>,
     /// Locked registry value when available.
     pub locked: Option<u32>,
+}
+
+/// Windows optional feature state from `Win32_OptionalFeature`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WindowsOptionalFeatureScanItem {
+    /// Feature name, such as `VirtualMachinePlatform`.
+    pub name: String,
+    /// Windows feature caption when available.
+    pub caption: Option<String>,
+    /// Install state code from `Win32_OptionalFeature`.
+    pub install_state: Option<u32>,
 }
 
 /// Microsoft Defender read-only state.

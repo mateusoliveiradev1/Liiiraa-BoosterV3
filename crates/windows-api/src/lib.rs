@@ -8,6 +8,7 @@ pub mod gaming;
 pub mod network;
 pub mod power;
 pub mod scan;
+pub mod security_tradeoff;
 pub mod storage;
 pub mod windows_update;
 
@@ -49,7 +50,13 @@ pub use scan::{
     ScheduledTaskScanItem, SecurityScan, ServiceScanItem, StartupAppScanItem,
     StorageCleanupCandidateScanItem, StorageCleanupScan, StorageScan, StorageSenseScan,
     StorageTrimScan, StorageVolumeScanItem, SystemScanError, SystemScanErrorReason,
-    SystemScanMode, SystemScanReport, WindowsSystemScanner,
+    SystemScanMode, SystemScanReport, WindowsOptionalFeatureScanItem, WindowsSystemScanner,
+};
+pub use security_tradeoff::{
+    apply_security_tradeoff_plan_to_fixture, build_consented_security_tradeoff_plan_from_scan,
+    build_security_tradeoff_plan_from_scan, security_tradeoff_plan_is_conservative,
+    verify_security_tradeoff_plan_fixture, SecurityTradeoffSettingsError,
+    SecurityTradeoffSettingsErrorReason, SecurityTradeoffSettingsSummary,
 };
 pub use storage::{
     apply_storage_sense_plan_to_fixture, build_consented_storage_sense_plan_from_scan,
