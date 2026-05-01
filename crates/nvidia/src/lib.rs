@@ -1,10 +1,67 @@
 //! NVIDIA profile backup, planning, apply, and verification.
 
 use gpu::{GpuCapabilityState, GpuInventory, GpuVendor, GpuVendorDetection};
-use std::fmt;
+use std::{collections::BTreeSet, fmt};
 
 /// Tweak ID for the required NVIDIA profile backup action.
 pub const NVIDIA_PROFILE_BACKUP_TWEAK_ID: &str = "nvidia.backup.profiles";
+
+/// Tweak ID for the conservative global NVIDIA performance profile.
+pub const NVIDIA_GLOBAL_PROFILE_TWEAK_ID: &str = "nvidia.global.profile";
+
+/// Driver profile name owned by Liiiraa for conservative global performance defaults.
+pub const LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME: &str =
+    "Liiiraa Boost - Global Performance";
+
+const APPROVED_GLOBAL_PROFILE_SETTINGS: &[(
+    &str,
+    &str,
+    &str,
+    NvidiaProfileSettingVisibility,
+)] = &[
+    (
+        "max-frame-rate",
+        "Max Frame Rate",
+        "Off",
+        NvidiaProfileSettingVisibility::UserVisible,
+    ),
+    (
+        "low-latency-mode",
+        "Low Latency Mode",
+        "Off",
+        NvidiaProfileSettingVisibility::UserVisible,
+    ),
+    (
+        "power-management-mode",
+        "Power management mode",
+        "Normal",
+        NvidiaProfileSettingVisibility::UserVisible,
+    ),
+    (
+        "shader-cache",
+        "Shader Cache",
+        "On",
+        NvidiaProfileSettingVisibility::Documented,
+    ),
+    (
+        "texture-filtering-quality",
+        "Texture filtering - Quality",
+        "Quality",
+        NvidiaProfileSettingVisibility::UserVisible,
+    ),
+    (
+        "threaded-optimization",
+        "Threaded optimization",
+        "Auto",
+        NvidiaProfileSettingVisibility::UserVisible,
+    ),
+    (
+        "vertical-sync",
+        "Vertical sync",
+        "Use the 3D application setting",
+        NvidiaProfileSettingVisibility::UserVisible,
+    ),
+];
 
 /// Read-only NVIDIA GPU, driver, and profile-tool detection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -314,12 +371,29 @@ pub enum NvidiaProfileError {
         /// Error message from the bridge implementation.
         message: String,
     },
+    /// The bridge failed while writing a profile.
+    ProfileWriteFailed {
+        /// Error message from the bridge implementation.
+        message: String,
+    },
     /// Profile readback returned an invalid shape.
     InvalidProfile {
         /// Profile name when available.
         profile: String,
         /// Validation failure reason.
         reason: String,
+    },
+    /// A requested global profile setting is outside the conservative allowlist.
+    UnsafeGlobalProfileSetting {
+        /// Setting ID that failed validation.
+        setting_id: String,
+        /// Validation failure reason.
+        reason: String,
+    },
+    /// The expected Liiiraa global profile was not visible during readback.
+    GlobalProfileReadbackMissing {
+        /// Expected global profile name.
+        profile: String,
     },
     /// The backup request filtered out all readback profiles.
     NoProfilesSelected,
@@ -338,8 +412,23 @@ impl fmt::Display for NvidiaProfileError {
             Self::BridgeReadFailed { message } => {
                 write!(formatter, "NVIDIA profile bridge read failed: {message}")
             }
+            Self::ProfileWriteFailed { message } => {
+                write!(formatter, "NVIDIA profile bridge write failed: {message}")
+            }
             Self::InvalidProfile { profile, reason } => {
                 write!(formatter, "invalid NVIDIA profile {profile:?}: {reason}")
+            }
+            Self::UnsafeGlobalProfileSetting { setting_id, reason } => {
+                write!(
+                    formatter,
+                    "unsafe global NVIDIA profile setting {setting_id:?}: {reason}"
+                )
+            }
+            Self::GlobalProfileReadbackMissing { profile } => {
+                write!(
+                    formatter,
+                    "global NVIDIA profile {profile:?} was not found during readback"
+                )
             }
             Self::NoProfilesSelected => {
                 formatter.write_str("backup request did not select any NVIDIA profiles")
@@ -357,6 +446,28 @@ pub trait NvidiaProfileBridge {
 
     /// Reads the current driver profile store into structured profile records.
     fn read_profiles(&self) -> Result<Vec<NvidiaProfile>, NvidiaProfileError>;
+}
+
+/// Bridge for applying NVIDIA profile mutations after backup.
+pub trait NvidiaProfileWriteBridge: NvidiaProfileBridge {
+    /// Writes or replaces a global NVIDIA profile.
+    fn write_global_profile(
+        &mut self,
+        profile: NvidiaProfile,
+    ) -> Result<(), NvidiaProfileError>;
+}
+
+/// Result of applying and verifying the conservative Liiiraa global profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NvidiaGlobalProfileApplyResult {
+    /// Tweak ID that produced this profile mutation.
+    pub tweak_id: &'static str,
+    /// Profile requested for application.
+    pub requested_profile: NvidiaProfile,
+    /// Rollback backup captured before mutation.
+    pub backup: NvidiaProfileBackup,
+    /// Profile as observed through post-apply readback.
+    pub verified_profile: NvidiaProfile,
 }
 
 /// Reads NVIDIA profiles through a validated bridge without creating a backup payload.
@@ -401,6 +512,126 @@ pub fn backup_profiles<B: NvidiaProfileBridge>(
         snapshot,
         fingerprint,
         rollback_kind: "restore-profile-export",
+    })
+}
+
+/// Returns the approved conservative settings for the global Liiiraa profile.
+#[must_use]
+pub fn approved_global_performance_settings() -> Vec<NvidiaProfileSetting> {
+    APPROVED_GLOBAL_PROFILE_SETTINGS
+        .iter()
+        .map(|setting| NvidiaProfileSetting {
+            id: setting.0.to_owned(),
+            name: setting.1.to_owned(),
+            value: setting.2.to_owned(),
+            visibility: setting.3,
+        })
+        .collect()
+}
+
+/// Builds the conservative global NVIDIA profile owned by Liiiraa.
+#[must_use]
+pub fn global_performance_profile() -> NvidiaProfile {
+    NvidiaProfile::global(
+        LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME,
+        approved_global_performance_settings(),
+    )
+}
+
+/// Validates that a global profile contains only approved conservative settings.
+pub fn validate_global_performance_profile(
+    profile: &NvidiaProfile,
+) -> Result<(), NvidiaProfileError> {
+    validate_profile(profile)?;
+
+    if profile.name != LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME {
+        return Err(NvidiaProfileError::InvalidProfile {
+            profile: profile.name.clone(),
+            reason: format!(
+                "expected global profile name {LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME:?}"
+            ),
+        });
+    }
+
+    if profile.scope != NvidiaProfileScope::Global {
+        return Err(NvidiaProfileError::InvalidProfile {
+            profile: profile.name.clone(),
+            reason: "Liiiraa global performance profile must use global scope".to_owned(),
+        });
+    }
+
+    let mut seen_setting_ids = BTreeSet::new();
+    for setting in &profile.settings {
+        if !seen_setting_ids.insert(setting.id.as_str()) {
+            return Err(NvidiaProfileError::UnsafeGlobalProfileSetting {
+                setting_id: setting.id.clone(),
+                reason: "duplicate settings make readback and rollback ambiguous".to_owned(),
+            });
+        }
+
+        validate_global_performance_setting(setting)?;
+    }
+
+    for expected_setting in approved_global_performance_settings() {
+        let expected_setting_id = expected_setting.id.as_str();
+        if !profile
+            .settings
+            .iter()
+            .any(|setting| setting.id == expected_setting_id)
+        {
+            return Err(NvidiaProfileError::UnsafeGlobalProfileSetting {
+                setting_id: expected_setting.id,
+                reason: "required conservative setting is missing".to_owned(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+/// Verifies that post-apply profile readback contains the exact Liiiraa global profile.
+pub fn verify_global_performance_profile_readback(
+    snapshot: &NvidiaProfileSnapshot,
+) -> Result<NvidiaProfile, NvidiaProfileError> {
+    let profile = snapshot
+        .profiles
+        .iter()
+        .find(|profile| {
+            profile.scope == NvidiaProfileScope::Global
+                && profile.name == LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME
+        })
+        .ok_or_else(|| NvidiaProfileError::GlobalProfileReadbackMissing {
+            profile: LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME.to_owned(),
+        })?;
+
+    validate_global_performance_profile(profile)?;
+
+    Ok(profile.clone())
+}
+
+/// Backs up current profiles, applies the global profile, and verifies readback.
+pub fn apply_global_performance_profile<B: NvidiaProfileWriteBridge>(
+    detection: &NvidiaDriverDetection,
+    bridge: &mut B,
+) -> Result<NvidiaGlobalProfileApplyResult, NvidiaProfileError> {
+    let backup = backup_profiles(
+        detection,
+        &*bridge,
+        NvidiaProfileBackupRequest::all_profiles_before_mutation(),
+    )?;
+    let requested_profile = global_performance_profile();
+    validate_global_performance_profile(&requested_profile)?;
+
+    bridge.write_global_profile(requested_profile.clone())?;
+
+    let snapshot = readback_profiles(detection, &*bridge)?;
+    let verified_profile = verify_global_performance_profile_readback(&snapshot)?;
+
+    Ok(NvidiaGlobalProfileApplyResult {
+        tweak_id: NVIDIA_GLOBAL_PROFILE_TWEAK_ID,
+        requested_profile,
+        backup,
+        verified_profile,
     })
 }
 
@@ -573,6 +804,54 @@ fn validate_profile(profile: &NvidiaProfile) -> Result<(), NvidiaProfileError> {
     Ok(())
 }
 
+fn validate_global_performance_setting(
+    setting: &NvidiaProfileSetting,
+) -> Result<(), NvidiaProfileError> {
+    if setting.visibility == NvidiaProfileSettingVisibility::Hidden {
+        return Err(NvidiaProfileError::UnsafeGlobalProfileSetting {
+            setting_id: setting.id.clone(),
+            reason: "hidden or undocumented settings are Lab-only, not global defaults"
+                .to_owned(),
+        });
+    }
+
+    let Some((expected_value, expected_visibility)) = approved_global_setting(setting.id.as_str())
+    else {
+        return Err(NvidiaProfileError::UnsafeGlobalProfileSetting {
+            setting_id: setting.id.clone(),
+            reason: "setting is not part of the conservative global allowlist".to_owned(),
+        });
+    };
+
+    if setting.value != expected_value {
+        return Err(NvidiaProfileError::UnsafeGlobalProfileSetting {
+            setting_id: setting.id.clone(),
+            reason: format!("expected conservative value {expected_value:?}"),
+        });
+    }
+
+    if setting.visibility != expected_visibility {
+        return Err(NvidiaProfileError::UnsafeGlobalProfileSetting {
+            setting_id: setting.id.clone(),
+            reason: format!(
+                "expected {} visibility",
+                expected_visibility.stable_key()
+            ),
+        });
+    }
+
+    Ok(())
+}
+
+fn approved_global_setting(
+    setting_id: &str,
+) -> Option<(&'static str, NvidiaProfileSettingVisibility)> {
+    APPROVED_GLOBAL_PROFILE_SETTINGS
+        .iter()
+        .find(|setting| setting.0 == setting_id)
+        .map(|setting| (setting.2, setting.3))
+}
+
 /// Static metadata describing this workspace crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CrateInfo {
@@ -606,11 +885,32 @@ mod tests {
     struct FixtureProfileBridge {
         kind: NvidiaProfileBridgeKind,
         profiles: Vec<NvidiaProfile>,
+        writes: Vec<NvidiaProfile>,
+        tampered_write: Option<(String, String)>,
     }
 
     impl FixtureProfileBridge {
         fn new(kind: NvidiaProfileBridgeKind, profiles: Vec<NvidiaProfile>) -> Self {
-            Self { kind, profiles }
+            Self {
+                kind,
+                profiles,
+                writes: Vec::new(),
+                tampered_write: None,
+            }
+        }
+
+        fn with_tampered_write(
+            kind: NvidiaProfileBridgeKind,
+            profiles: Vec<NvidiaProfile>,
+            setting_id: &str,
+            value: &str,
+        ) -> Self {
+            Self {
+                kind,
+                profiles,
+                writes: Vec::new(),
+                tampered_write: Some((setting_id.to_owned(), value.to_owned())),
+            }
         }
     }
 
@@ -621,6 +921,41 @@ mod tests {
 
         fn read_profiles(&self) -> Result<Vec<NvidiaProfile>, NvidiaProfileError> {
             Ok(self.profiles.clone())
+        }
+    }
+
+    impl NvidiaProfileWriteBridge for FixtureProfileBridge {
+        fn write_global_profile(
+            &mut self,
+            mut profile: NvidiaProfile,
+        ) -> Result<(), NvidiaProfileError> {
+            validate_profile(&profile)?;
+            if profile.scope != NvidiaProfileScope::Global {
+                return Err(NvidiaProfileError::InvalidProfile {
+                    profile: profile.name,
+                    reason: "write_global_profile requires a global profile".to_owned(),
+                });
+            }
+
+            self.writes.push(profile.clone());
+
+            if let Some((setting_id, value)) = &self.tampered_write {
+                if let Some(setting) = profile
+                    .settings
+                    .iter_mut()
+                    .find(|setting| setting.id == setting_id.as_str())
+                {
+                    setting.value = value.clone();
+                }
+            }
+
+            self.profiles.retain(|existing| {
+                existing.scope != NvidiaProfileScope::Global
+                    || existing.name != profile.name.as_str()
+            });
+            self.profiles.push(profile);
+
+            Ok(())
         }
     }
 
@@ -867,6 +1202,127 @@ mod tests {
             error,
             NvidiaProfileError::InvalidProfile { profile, .. } if profile == "PUBG Competitive"
         ));
+    }
+
+    #[test]
+    fn global_performance_profile_uses_only_conservative_settings() {
+        let profile = global_performance_profile();
+
+        validate_global_performance_profile(&profile)
+            .expect("global profile should pass its conservative allowlist");
+
+        assert_eq!(profile.name, LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME);
+        assert_eq!(profile.scope, NvidiaProfileScope::Global);
+        assert!(profile.applications.is_empty());
+        assert!(profile.settings.iter().all(|setting| {
+            setting.visibility != NvidiaProfileSettingVisibility::Hidden
+                && setting.value != "Prefer maximum performance"
+                && setting.value != "Ultra"
+        }));
+        assert!(profile
+            .settings
+            .iter()
+            .any(|setting| setting.id == "shader-cache" && setting.value == "On"));
+        assert!(profile
+            .settings
+            .iter()
+            .any(|setting| setting.id == "max-frame-rate" && setting.value == "Off"));
+    }
+
+    #[test]
+    fn global_profile_apply_backs_up_writes_and_verifies_readback() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let mut bridge = FixtureProfileBridge::new(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![
+                NvidiaProfile::global(
+                    "Base Profile",
+                    vec![NvidiaProfileSetting::new(
+                        "power-management-mode",
+                        "Power management mode",
+                        "Prefer maximum performance",
+                        NvidiaProfileSettingVisibility::UserVisible,
+                    )],
+                ),
+                pubg_profile_with_reversed_settings(),
+            ],
+        );
+
+        let result = apply_global_performance_profile(&detection, &mut bridge)
+            .expect("global profile should apply and verify through readback");
+
+        assert_eq!(result.tweak_id, NVIDIA_GLOBAL_PROFILE_TWEAK_ID);
+        assert_eq!(
+            result.requested_profile.name,
+            LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME
+        );
+        assert_eq!(result.backup.tweak_id, NVIDIA_PROFILE_BACKUP_TWEAK_ID);
+        assert_eq!(result.backup.snapshot.profiles.len(), 2);
+        assert_eq!(bridge.writes.len(), 1);
+        assert_eq!(
+            result.verified_profile.name,
+            LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME
+        );
+        assert_eq!(
+            result.verified_profile.settings,
+            canonicalize_settings(approved_global_performance_settings())
+        );
+    }
+
+    #[test]
+    fn global_profile_readback_rejects_tampered_settings() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let mut bridge = FixtureProfileBridge::with_tampered_write(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![NvidiaProfile::global("Base Profile", Vec::new())],
+            "low-latency-mode",
+            "Ultra",
+        );
+
+        let error = apply_global_performance_profile(&detection, &mut bridge)
+            .expect_err("readback must catch settings changed outside the allowlist");
+
+        assert!(matches!(
+            error,
+            NvidiaProfileError::UnsafeGlobalProfileSetting { setting_id, .. }
+                if setting_id == "low-latency-mode"
+        ));
+    }
+
+    #[test]
+    fn global_profile_readback_requires_the_named_liiiraa_profile() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let bridge = FixtureProfileBridge::new(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![NvidiaProfile::global("Base Profile", Vec::new())],
+        );
+        let snapshot = readback_profiles(&detection, &bridge)
+            .expect("fixture readback should be valid without the Liiiraa profile");
+
+        let error = verify_global_performance_profile_readback(&snapshot)
+            .expect_err("missing Liiiraa global profile should fail verification");
+
+        assert!(matches!(
+            error,
+            NvidiaProfileError::GlobalProfileReadbackMissing { profile }
+                if profile == LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME
+        ));
+    }
+
+    #[test]
+    fn catalog_fixture_matches_global_profile_contract() {
+        let fixture = include_str!("../tests/fixtures/nvidia_global_performance_profile.catalog.json");
+
+        assert!(fixture.contains(NVIDIA_GLOBAL_PROFILE_TWEAK_ID));
+        assert!(fixture.contains(LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME));
+        assert!(fixture.contains("\"requiresBackup\": true"));
+        assert!(fixture.contains("\"verify\": \"readback\""));
+        assert!(!fixture.contains("\"visibility\": \"hidden\""));
+
+        for setting in approved_global_performance_settings() {
+            assert!(fixture.contains(setting.id.as_str()));
+            assert!(fixture.contains(setting.value.as_str()));
+        }
     }
 
     fn ready_detection(

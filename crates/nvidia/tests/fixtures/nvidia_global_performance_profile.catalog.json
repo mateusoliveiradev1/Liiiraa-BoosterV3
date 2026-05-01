@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1",
+  "tweak": {
+    "id": "nvidia.global.profile",
+    "mode": "safe",
+    "category": "nvidia",
+    "name": "Liiiraa Boost - Global Performance",
+    "profileName": "Liiiraa Boost - Global Performance",
+    "scope": "global",
+    "default": "prompt",
+    "requiresBackup": true,
+    "verify": "readback",
+    "rollback": "restore-profile-export",
+    "settings": [
+      {
+        "id": "max-frame-rate",
+        "name": "Max Frame Rate",
+        "value": "Off",
+        "visibility": "user-visible",
+        "reason": "Global caps stay off; FPS caps belong to VRR or game-specific profiles."
+      },
+      {
+        "id": "low-latency-mode",
+        "name": "Low Latency Mode",
+        "value": "Off",
+        "visibility": "user-visible",
+        "reason": "Global defaults avoid stacking driver latency controls with in-game Reflex."
+      },
+      {
+        "id": "power-management-mode",
+        "name": "Power management mode",
+        "value": "Normal",
+        "visibility": "user-visible",
+        "reason": "Avoids forcing maximum clocks globally, especially on laptops."
+      },
+      {
+        "id": "shader-cache",
+        "name": "Shader Cache",
+        "value": "On",
+        "visibility": "documented",
+        "reason": "Keeps NVIDIA shader caching enabled without clearing or resizing by default."
+      },
+      {
+        "id": "texture-filtering-quality",
+        "name": "Texture filtering - Quality",
+        "value": "Quality",
+        "visibility": "user-visible",
+        "reason": "Performance texture filtering is reserved for explicit competitive profiles."
+      },
+      {
+        "id": "threaded-optimization",
+        "name": "Threaded optimization",
+        "value": "Auto",
+        "visibility": "user-visible",
+        "reason": "Lets the driver choose the safe path per workload."
+      },
+      {
+        "id": "vertical-sync",
+        "name": "Vertical sync",
+        "value": "Use the 3D application setting",
+        "visibility": "user-visible",
+        "reason": "Global sync policy stays application-controlled until a display or game profile is planned."
+      }
+    ],
+    "blockedDefaults": [
+      "Prefer maximum performance",
+      "Low Latency Mode Ultra",
+      "global FPS caps",
+      "hidden ReBAR overrides",
+      "bulk NPI imports"
+    ]
+  }
+}
