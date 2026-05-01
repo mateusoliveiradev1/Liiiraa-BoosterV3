@@ -3,6 +3,7 @@
 pub mod backup;
 pub mod background_work;
 pub mod catalog;
+pub mod cpu_platform;
 pub mod defender;
 pub mod gaming_capture;
 pub mod graphics_settings;

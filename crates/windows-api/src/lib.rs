@@ -3,6 +3,7 @@
 pub mod backup;
 pub mod background_work;
 pub mod command;
+pub mod cpu;
 pub mod defender;
 pub mod gaming;
 pub mod graphics;
@@ -26,6 +27,10 @@ pub use background_work::{
 };
 pub use command::{
     FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
+};
+pub use cpu::{
+    build_cpu_platform_plan_from_scan, verify_cpu_platform_plan_fixture,
+    CpuPlatformSettingsError, CpuPlatformSettingsErrorReason, CpuPlatformSettingsSummary,
 };
 pub use defender::{
     apply_defender_performance_plan_to_fixture, build_defender_performance_plan_from_scan,
