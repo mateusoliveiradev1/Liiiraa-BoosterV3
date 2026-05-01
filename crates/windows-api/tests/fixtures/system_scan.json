@@ -69,7 +69,54 @@
         "healthStatus": "Healthy",
         "sizeBytes": 1000204886016
       }
-    ]
+    ],
+    "cleanup": {
+      "candidates": [
+        {
+          "target": "user-temp",
+          "path": "C:\\Users\\Liiiraa\\AppData\\Local\\Temp",
+          "kind": "user_temp",
+          "reclaimableBytes": 134217728,
+          "fileCount": 42,
+          "safeToPreview": true
+        },
+        {
+          "target": "downloads",
+          "path": "C:\\Users\\Liiiraa\\Downloads",
+          "kind": "other",
+          "reclaimableBytes": 0,
+          "fileCount": 0,
+          "safeToPreview": false
+        }
+      ],
+      "excludedPatterns": [
+        "Downloads",
+        "Documents",
+        "game install folders",
+        "PUBG game content",
+        "in-use files"
+      ]
+    },
+    "storageSense": {
+      "enabled": false,
+      "cadenceDays": 7,
+      "recycleBinCleanupDays": 14,
+      "downloadsCleanupDays": null,
+      "source": "HKCU StoragePolicy"
+    },
+    "trim": {
+      "ntfsDisableDeleteNotify": 0,
+      "refsDisableDeleteNotify": 0,
+      "optimizeVolumeAvailable": true,
+      "source": "fsutil behavior query DisableDeleteNotify"
+    },
+    "directStorage": {
+      "osSupported": true,
+      "nvmePresent": true,
+      "gpuDecompressionSupported": true,
+      "gameVolumeBusType": "NVMe",
+      "source": "scan-derived DirectStorage readiness"
+    }
   },
   "networkAdapters": [
     {

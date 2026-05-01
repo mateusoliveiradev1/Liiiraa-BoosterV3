@@ -41,6 +41,46 @@ function Convert-NullableUInt32($value) {
     }
 }
 
+function Convert-NullableBool($value) {
+    if ($null -eq $value) {
+        $null
+    } else {
+        [bool]$value
+    }
+}
+
+function Get-PropertyValue($props, [string]$name) {
+    if ($null -eq $props) {
+        $null
+    } else {
+        $property = $props.PSObject.Properties[$name]
+        if ($null -eq $property) { $null } else { $property.Value }
+    }
+}
+
+function Measure-CleanupCandidate([string]$logicalTarget, [string]$path, [string]$kind) {
+    $expanded = [Environment]::ExpandEnvironmentVariables($path)
+    $exists = Test-Path -LiteralPath $expanded
+    $fileCount = 0
+    $bytes = [UInt64]0
+
+    if ($exists) {
+        $measure = Get-ChildItem -LiteralPath $expanded -Force -Recurse -File -ErrorAction SilentlyContinue |
+            Measure-Object -Property Length -Sum
+        $fileCount = if ($null -eq $measure.Count) { 0 } else { [UInt32]$measure.Count }
+        $bytes = if ($null -eq $measure.Sum) { [UInt64]0 } else { [UInt64]$measure.Sum }
+    }
+
+    [ordered]@{
+        target = $logicalTarget
+        path = $expanded
+        kind = $kind
+        reclaimableBytes = $bytes
+        fileCount = $fileCount
+        safeToPreview = $exists
+    }
+}
+
 $os = Invoke-ScanSection "os" {
     $item = Get-CimInstance -ClassName Win32_OperatingSystem
     [ordered]@{
@@ -116,6 +156,89 @@ $physicalDisks = @(Invoke-ScanSection "storage.physical" {
         }
     })
 } @())
+
+$storageCleanup = Invoke-ScanSection "storage.cleanup" {
+    [ordered]@{
+        candidates = @(
+            Measure-CleanupCandidate "user-temp" "%TEMP%" "user_temp"
+            Measure-CleanupCandidate "windows-temp" "$env:SystemRoot\Temp" "windows_temp"
+            Measure-CleanupCandidate "directx-shader-cache" "$env:LOCALAPPDATA\D3DSCache" "shader_cache"
+        )
+        excludedPatterns = @(
+            "Downloads"
+            "Documents"
+            "Desktop"
+            "game install folders"
+            "PUBG game content"
+            "in-use files"
+        )
+    }
+} ([ordered]@{
+    candidates = @()
+    excludedPatterns = @()
+})
+
+$storageSense = Invoke-ScanSection "storage.sense" {
+    $policyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
+    $props = if (Test-Path $policyPath) { Get-ItemProperty -Path $policyPath } else { $null }
+    $enabledRaw = Get-PropertyValue $props "01"
+    [ordered]@{
+        enabled = if ($null -eq $enabledRaw) { $null } else { [UInt32]$enabledRaw -ne 0 }
+        cadenceDays = Convert-NullableUInt32 (Get-PropertyValue $props "2048")
+        recycleBinCleanupDays = Convert-NullableUInt32 (Get-PropertyValue $props "256")
+        downloadsCleanupDays = Convert-NullableUInt32 (Get-PropertyValue $props "512")
+        source = "HKCU StoragePolicy"
+    }
+} ([ordered]@{
+    enabled = $null
+    cadenceDays = $null
+    recycleBinCleanupDays = $null
+    downloadsCleanupDays = $null
+    source = "HKCU StoragePolicy"
+})
+
+$trim = Invoke-ScanSection "storage.trim" {
+    $output = (& "$env:SystemRoot\System32\fsutil.exe" behavior query DisableDeleteNotify) -join "`n"
+    $ntfs = $null
+    $refs = $null
+    if ($output -match "NTFS DisableDeleteNotify\s*=\s*(\d+)") {
+        $ntfs = [UInt32]$Matches[1]
+    }
+    if ($output -match "ReFS DisableDeleteNotify\s*=\s*(\d+)") {
+        $refs = [UInt32]$Matches[1]
+    }
+
+    [ordered]@{
+        ntfsDisableDeleteNotify = $ntfs
+        refsDisableDeleteNotify = $refs
+        optimizeVolumeAvailable = [bool](Get-Command Optimize-Volume -ErrorAction SilentlyContinue)
+        source = "fsutil behavior query DisableDeleteNotify"
+    }
+} ([ordered]@{
+    ntfsDisableDeleteNotify = $null
+    refsDisableDeleteNotify = $null
+    optimizeVolumeAvailable = $false
+    source = "fsutil behavior query DisableDeleteNotify"
+})
+
+$directStorage = Invoke-ScanSection "storage.direct_storage" {
+    $buildNumber = 0
+    $buildParsed = [Int32]::TryParse([string]$os.buildNumber, [ref]$buildNumber)
+    $nvmePresent = @($physicalDisks | Where-Object { [string]$_["busType"] -match "NVMe" }).Count -gt 0
+    [ordered]@{
+        osSupported = if ($buildParsed) { $buildNumber -ge 19041 } else { $null }
+        nvmePresent = $nvmePresent
+        gpuDecompressionSupported = $null
+        gameVolumeBusType = $null
+        source = "scan-derived DirectStorage readiness"
+    }
+} ([ordered]@{
+    osSupported = $null
+    nvmePresent = $null
+    gpuDecompressionSupported = $null
+    gameVolumeBusType = $null
+    source = "scan-derived DirectStorage readiness"
+})
 
 $networkAdapters = @(Invoke-ScanSection "network.adapters" {
     @(Get-CimInstance -ClassName Win32_NetworkAdapter -Filter "PhysicalAdapter=True" | ForEach-Object {
@@ -279,6 +402,10 @@ $rebootRequired = [ordered]@{
     storage = [ordered]@{
         volumes = $volumes
         physicalDisks = $physicalDisks
+        cleanup = $storageCleanup
+        storageSense = $storageSense
+        trim = $trim
+        directStorage = $directStorage
     }
     networkAdapters = $networkAdapters
     services = $services
@@ -484,6 +611,18 @@ pub struct StorageScan {
     pub volumes: Vec<StorageVolumeScanItem>,
     /// Physical disk inventory.
     pub physical_disks: Vec<PhysicalDiskScanItem>,
+    /// Read-only cleanup preview.
+    #[serde(default)]
+    pub cleanup: StorageCleanupScan,
+    /// Storage Sense state.
+    #[serde(default)]
+    pub storage_sense: StorageSenseScan,
+    /// TRIM and Optimize-Volume state.
+    #[serde(default)]
+    pub trim: StorageTrimScan,
+    /// DirectStorage readiness state.
+    #[serde(default)]
+    pub direct_storage: DirectStorageScan,
 }
 
 /// Mounted fixed volume inventory.
@@ -518,6 +657,80 @@ pub struct PhysicalDiskScanItem {
     pub health_status: Option<String>,
     /// Disk size in bytes.
     pub size_bytes: Option<u64>,
+}
+
+/// Read-only storage cleanup preview.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StorageCleanupScan {
+    /// Candidate temp/cache locations and size estimates.
+    pub candidates: Vec<StorageCleanupCandidateScanItem>,
+    /// Exclusions that must remain outside cleanup.
+    pub excluded_patterns: Vec<String>,
+}
+
+/// One cleanup preview candidate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StorageCleanupCandidateScanItem {
+    /// Logical candidate target.
+    pub target: String,
+    /// Candidate path or location label.
+    pub path: String,
+    /// Candidate kind.
+    pub kind: String,
+    /// Estimated reclaimable bytes.
+    pub reclaimable_bytes: u64,
+    /// Estimated file count.
+    pub file_count: u32,
+    /// Whether this candidate is safe to show in cleanup preview.
+    pub safe_to_preview: bool,
+}
+
+/// Storage Sense registry state.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StorageSenseScan {
+    /// Whether Storage Sense appears enabled.
+    pub enabled: Option<bool>,
+    /// Configured cleanup cadence in days.
+    pub cadence_days: Option<u32>,
+    /// Configured recycle-bin cleanup age in days.
+    pub recycle_bin_cleanup_days: Option<u32>,
+    /// Configured downloads cleanup age in days.
+    pub downloads_cleanup_days: Option<u32>,
+    /// Read-only source used for the scan.
+    pub source: String,
+}
+
+/// TRIM and Optimize-Volume state.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StorageTrimScan {
+    /// NTFS DisableDeleteNotify value.
+    pub ntfs_disable_delete_notify: Option<u32>,
+    /// ReFS DisableDeleteNotify value.
+    pub refs_disable_delete_notify: Option<u32>,
+    /// Whether Optimize-Volume is available.
+    pub optimize_volume_available: bool,
+    /// Read-only source used for the scan.
+    pub source: String,
+}
+
+/// DirectStorage readiness state.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DirectStorageScan {
+    /// Whether the OS build supports DirectStorage.
+    pub os_supported: Option<bool>,
+    /// Whether an NVMe disk is present.
+    pub nvme_present: Option<bool>,
+    /// Whether GPU decompression support is known.
+    pub gpu_decompression_supported: Option<bool>,
+    /// Bus type of the game volume when known.
+    pub game_volume_bus_type: Option<String>,
+    /// Read-only source used for the scan.
+    pub source: String,
 }
 
 /// Network adapter inventory item.

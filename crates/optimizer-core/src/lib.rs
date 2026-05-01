@@ -8,6 +8,7 @@ pub mod ipc;
 pub mod planning;
 pub mod power_plan;
 pub mod protected_storage;
+pub mod storage;
 pub mod tweak_contracts;
 
 /// Static metadata describing this workspace crate.

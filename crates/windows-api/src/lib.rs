@@ -6,6 +6,7 @@ pub mod command;
 pub mod gaming;
 pub mod power;
 pub mod scan;
+pub mod storage;
 
 pub use backup::WindowsRollbackFixture;
 pub use background_work::{
@@ -28,11 +29,17 @@ pub use power::{
 };
 pub use scan::{
     parse_system_scan_report, scan_system, BackgroundAppScanItem, CpuScanItem, DefenderScan,
-    GpuScanItem, MemoryModuleScanItem, MemoryScan, NetworkAdapterScanItem, OsScan,
-    PhysicalDiskScanItem, PowerPlanScan, RebootRequiredScan, ScheduledTaskScanItem,
-    SecurityScan, ServiceScanItem, StartupAppScanItem, StorageScan, StorageVolumeScanItem,
+    DirectStorageScan, GpuScanItem, MemoryModuleScanItem, MemoryScan, NetworkAdapterScanItem,
+    OsScan, PhysicalDiskScanItem, PowerPlanScan, RebootRequiredScan, ScheduledTaskScanItem,
+    SecurityScan, ServiceScanItem, StartupAppScanItem, StorageCleanupCandidateScanItem,
+    StorageCleanupScan, StorageScan, StorageSenseScan, StorageTrimScan, StorageVolumeScanItem,
     SystemScanError, SystemScanErrorReason, SystemScanMode, SystemScanReport,
     WindowsSystemScanner,
+};
+pub use storage::{
+    apply_storage_sense_plan_to_fixture, build_consented_storage_sense_plan_from_scan,
+    build_storage_readiness_plan_from_scan, verify_storage_sense_plan_fixture,
+    StorageSenseRegistryError, StorageSenseRegistryErrorReason, StorageSenseRegistrySummary,
 };
 
 /// Static metadata describing this workspace crate.
