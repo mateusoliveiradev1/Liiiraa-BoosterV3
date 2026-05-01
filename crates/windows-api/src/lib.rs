@@ -16,7 +16,12 @@ pub mod windows_update;
 
 pub use backup::WindowsRollbackFixture;
 pub use background_work::{
-    background_work_plan_is_recommendation_only, build_background_work_plan_from_scan,
+    apply_background_service_plan_to_fixture,
+    background_services_plan_blocks_searchapp_rename,
+    background_work_plan_is_recommendation_only, build_background_services_plan_from_scan,
+    build_background_work_plan_from_scan, build_consented_background_services_plan_from_scan,
+    verify_background_service_plan_fixture, BackgroundServiceSettingsError,
+    BackgroundServiceSettingsErrorReason, BackgroundServiceSettingsSummary,
 };
 pub use command::{
     FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
