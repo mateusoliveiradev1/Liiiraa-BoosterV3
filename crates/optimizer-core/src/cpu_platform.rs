@@ -36,6 +36,33 @@ pub const CPU_AMD_CPPC_PREFERRED_CORES_TWEAK_ID: &str =
 /// Tweak ID for AMD X3D scheduler readiness.
 pub const CPU_AMD_X3D_SCHEDULER_DETECT_TWEAK_ID: &str =
     "cpu.amd.x3d-scheduler.detect";
+/// Tweak ID for denying Intel E-core disable requests.
+pub const CPU_INTEL_DISABLE_E_CORES_TWEAK_ID: &str = "cpu.intel.disable-e-cores";
+/// Tweak ID for denying global SMT/Hyper-Threading disable requests.
+pub const CPU_SMT_DISABLE_TWEAK_ID: &str = "cpu.smt-disable";
+/// Tweak ID for denying CPU security mitigation disable requests.
+pub const CPU_SECURITY_MITIGATIONS_DISABLE_TWEAK_ID: &str =
+    "cpu.security-mitigations-disable";
+/// Tweak ID for denying realtime process priority requests.
+pub const CPU_REALTIME_PRIORITY_TWEAK_ID: &str = "cpu.priority.realtime-game";
+/// Tweak ID for denying forced hard affinity requests.
+pub const CPU_HARD_AFFINITY_TWEAK_ID: &str = "cpu.hard-affinity.force";
+/// Blocked guardrail ID for automatic CPU overclocking or undervolting.
+pub const BLOCKED_CPU_AUTO_OC_GUARDRAIL_ID: &str = "blocked.software-overclock-auto";
+
+/// Logical denial target for Intel E-core disable requests.
+pub const TARGET_CPU_DISABLE_E_CORES: &str = "blocked:cpu/intel/e-cores-disable";
+/// Logical denial target for global SMT/Hyper-Threading disable requests.
+pub const TARGET_CPU_DISABLE_SMT: &str = "blocked:cpu/smt-disable";
+/// Logical denial target for CPU security mitigation disable requests.
+pub const TARGET_CPU_DISABLE_SECURITY_MITIGATIONS: &str =
+    "blocked:cpu/security-mitigations-disable";
+/// Logical denial target for realtime game priority requests.
+pub const TARGET_CPU_REALTIME_PRIORITY: &str = "blocked:cpu/realtime-priority";
+/// Logical denial target for forced hard affinity requests.
+pub const TARGET_CPU_HARD_AFFINITY: &str = "blocked:cpu/hard-affinity";
+/// Logical denial target for automatic CPU overclocking or undervolting.
+pub const TARGET_CPU_AUTO_OC: &str = "blocked:cpu/auto-overclock-undervolt";
 
 const INTEL_OFFICIAL_PATH_WARNING: &str = concat!(
     "Use the official Intel APO, DTT, BIOS, and platform package path; do not force ",
@@ -57,6 +84,127 @@ pub struct CpuPlatformPlanRequest {
     pub requested_mode: TweakMode,
     /// Read-only CPU and platform inspection.
     pub inspection: CpuPlatformInspection,
+}
+
+/// Unsafe CPU action requested by a script, catalog entry, or future shortcut.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpuGuardrailAction {
+    /// Request to disable Intel E-cores as a gaming optimization.
+    DisableIntelECores,
+    /// Request to disable SMT or Hyper-Threading globally.
+    DisableSmt,
+    /// Request to disable Spectre, Meltdown, or related CPU security mitigations.
+    DisableSecurityMitigations,
+    /// Request to force realtime priority for a game process.
+    ForceRealtimePriority,
+    /// Request to force hard CPU affinity for a game or process.
+    ForceHardAffinity,
+    /// Request to automatically overclock or undervolt CPU settings.
+    AutomaticOverclockOrUndervolt,
+}
+
+impl CpuGuardrailAction {
+    /// All CPU guardrail actions owned by T058.
+    pub const ALL: [Self; 6] = [
+        Self::DisableIntelECores,
+        Self::DisableSmt,
+        Self::DisableSecurityMitigations,
+        Self::ForceRealtimePriority,
+        Self::ForceHardAffinity,
+        Self::AutomaticOverclockOrUndervolt,
+    ];
+
+    const fn tweak_id(self) -> &'static str {
+        match self {
+            Self::DisableIntelECores => CPU_INTEL_DISABLE_E_CORES_TWEAK_ID,
+            Self::DisableSmt => CPU_SMT_DISABLE_TWEAK_ID,
+            Self::DisableSecurityMitigations => CPU_SECURITY_MITIGATIONS_DISABLE_TWEAK_ID,
+            Self::ForceRealtimePriority => CPU_REALTIME_PRIORITY_TWEAK_ID,
+            Self::ForceHardAffinity => CPU_HARD_AFFINITY_TWEAK_ID,
+            Self::AutomaticOverclockOrUndervolt => BLOCKED_CPU_AUTO_OC_GUARDRAIL_ID,
+        }
+    }
+
+    const fn denial_target(self) -> &'static str {
+        match self {
+            Self::DisableIntelECores => TARGET_CPU_DISABLE_E_CORES,
+            Self::DisableSmt => TARGET_CPU_DISABLE_SMT,
+            Self::DisableSecurityMitigations => TARGET_CPU_DISABLE_SECURITY_MITIGATIONS,
+            Self::ForceRealtimePriority => TARGET_CPU_REALTIME_PRIORITY,
+            Self::ForceHardAffinity => TARGET_CPU_HARD_AFFINITY,
+            Self::AutomaticOverclockOrUndervolt => TARGET_CPU_AUTO_OC,
+        }
+    }
+
+    const fn desired_value(self) -> &'static str {
+        match self {
+            Self::DisableIntelECores => "disable_e_cores",
+            Self::DisableSmt => "disable_smt_or_hyper_threading",
+            Self::DisableSecurityMitigations => "disable_cpu_security_mitigations",
+            Self::ForceRealtimePriority => "force_realtime_priority",
+            Self::ForceHardAffinity => "force_hard_affinity",
+            Self::AutomaticOverclockOrUndervolt => "automatic_overclock_or_undervolt",
+        }
+    }
+
+    const fn denial_warning(self) -> &'static str {
+        match self {
+            Self::DisableIntelECores => {
+                "Intel E-core disable requests are denied; prefer OS and Thread Director-friendly scheduling."
+            }
+            Self::DisableSmt => {
+                "Global SMT or Hyper-Threading disable requests are denied because regressions are workload-specific."
+            }
+            Self::DisableSecurityMitigations => {
+                "CPU security mitigation disable requests are denied because they reduce platform protection."
+            }
+            Self::ForceRealtimePriority => {
+                "Realtime game priority requests are denied because they can starve system threads and increase stutter."
+            }
+            Self::ForceHardAffinity => {
+                "Forced hard affinity requests are denied unless a future benchmark-only Lab profile owns a session-scoped rollback."
+            }
+            Self::AutomaticOverclockOrUndervolt => {
+                "Automatic CPU overclocking or undervolting is denied; keep XTU, Ryzen Master, PBO, and Curve Optimizer guidance advisory."
+            }
+        }
+    }
+}
+
+/// Request used to build T058 CPU guardrail denials.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CpuGuardrailPlanRequest {
+    /// Stable plan ID supplied by the caller.
+    pub plan_id: String,
+    /// Highest mode requested by the user.
+    pub requested_mode: TweakMode,
+    /// Unsafe CPU actions requested by a script, catalog entry, or shortcut.
+    pub requested_actions: Vec<CpuGuardrailAction>,
+}
+
+impl CpuGuardrailPlanRequest {
+    /// Creates a CPU guardrail plan request with no unsafe actions requested yet.
+    #[must_use]
+    pub fn new(plan_id: impl Into<String>) -> Self {
+        Self {
+            plan_id: plan_id.into(),
+            requested_mode: TweakMode::Safe,
+            requested_actions: Vec::new(),
+        }
+    }
+
+    /// Creates a CPU guardrail plan request with explicit unsafe action candidates.
+    #[must_use]
+    pub fn with_actions(
+        plan_id: impl Into<String>,
+        requested_actions: Vec<CpuGuardrailAction>,
+    ) -> Self {
+        Self {
+            plan_id: plan_id.into(),
+            requested_mode: TweakMode::Safe,
+            requested_actions,
+        }
+    }
 }
 
 impl CpuPlatformPlanRequest {
@@ -107,6 +255,31 @@ pub fn build_cpu_platform_plan(request: &CpuPlatformPlanRequest) -> TweakPlan {
     }
 }
 
+/// Builds a CPU guardrail plan that denies unsafe CPU mutation requests.
+#[must_use]
+pub fn build_cpu_guardrail_plan(request: &CpuGuardrailPlanRequest) -> TweakPlan {
+    let items = CpuGuardrailAction::ALL
+        .iter()
+        .copied()
+        .map(|action| {
+            cpu_guardrail_item(action, request.requested_actions.contains(&action))
+        })
+        .collect::<Vec<_>>();
+    let warnings = items
+        .iter()
+        .flat_map(|item| item.warnings.iter())
+        .cloned()
+        .collect();
+
+    TweakPlan {
+        id: request.plan_id.clone(),
+        requested_mode: request.requested_mode,
+        catalog_schema_version: SUPPORTED_CATALOG_SCHEMA_VERSION.to_owned(),
+        items,
+        warnings,
+    }
+}
+
 /// Returns true when the ID belongs to the T057 CPU platform scope.
 #[must_use]
 pub fn is_cpu_platform_tweak_id(tweak_id: &str) -> bool {
@@ -122,6 +295,39 @@ pub fn is_cpu_platform_tweak_id(tweak_id: &str) -> bool {
             | CPU_AMD_CPPC_PREFERRED_CORES_TWEAK_ID
             | CPU_AMD_X3D_SCHEDULER_DETECT_TWEAK_ID
     )
+}
+
+/// Returns true when the ID belongs to the T058 CPU guardrail scope.
+#[must_use]
+pub fn is_cpu_guardrail_tweak_id(tweak_id: &str) -> bool {
+    matches!(
+        tweak_id,
+        CPU_INTEL_DISABLE_E_CORES_TWEAK_ID
+            | CPU_SMT_DISABLE_TWEAK_ID
+            | CPU_SECURITY_MITIGATIONS_DISABLE_TWEAK_ID
+            | CPU_REALTIME_PRIORITY_TWEAK_ID
+            | CPU_HARD_AFFINITY_TWEAK_ID
+            | BLOCKED_CPU_AUTO_OC_GUARDRAIL_ID
+    )
+}
+
+/// Returns true when every unsafe CPU request is denied and no apply action exists.
+#[must_use]
+pub fn cpu_guardrail_plan_blocks_unsafe_actions(plan: &TweakPlan) -> bool {
+    !plan.has_apply_items()
+        && plan.items.iter().all(|item| {
+            is_cpu_guardrail_tweak_id(&item.tweak_id)
+                && item.mode == TweakMode::Blocked
+                && item.risk == TweakRisk::Critical
+                && item.category == TweakCategory::BlockedGuardrail
+                && item.backup == BackupRequirement::NotRequired
+                && item.rollback.kind == RollbackKind::NotNeededReadonly
+                && matches!(item.action, PlanAction::DetectOnly | PlanAction::Deny)
+                && item.changes.iter().all(|change| {
+                    change.operation == TweakOperationKind::Deny
+                        && change.scope == SessionScope::Blocked
+                })
+        })
 }
 
 /// Returns true when T057 has no default CPU mutation or unsafe operation.
@@ -144,6 +350,43 @@ fn read_only_or_denial_change(change: &PlannedChange) -> bool {
         change.scope,
         SessionScope::RecommendationOnly | SessionScope::Blocked
     )
+}
+
+fn cpu_guardrail_item(action: CpuGuardrailAction, requested: bool) -> TweakPlanItem {
+    let changes = if requested {
+        vec![PlannedChange {
+            target: action.denial_target().to_owned(),
+            operation: TweakOperationKind::Deny,
+            previous_value: None,
+            desired_value: Some(action.desired_value().to_owned()),
+            scope: SessionScope::Blocked,
+        }]
+    } else {
+        Vec::new()
+    };
+    let warnings = if requested {
+        vec![action.denial_warning().to_owned()]
+    } else {
+        Vec::new()
+    };
+
+    TweakPlanItem {
+        tweak_id: action.tweak_id().to_owned(),
+        category: TweakCategory::BlockedGuardrail,
+        action: if requested {
+            PlanAction::Deny
+        } else {
+            PlanAction::DetectOnly
+        },
+        mode: TweakMode::Blocked,
+        risk: TweakRisk::Critical,
+        changes,
+        backup: BackupRequirement::NotRequired,
+        rollback: RollbackPlan::not_needed(),
+        reboot: RebootPolicy::None,
+        requires_admin: false,
+        warnings,
+    }
 }
 
 fn vendor_topology_item(inspection: &CpuPlatformInspection) -> TweakPlanItem {
@@ -490,5 +733,85 @@ mod tests {
         topology.action = PlanAction::Apply;
 
         assert!(!cpu_platform_plan_has_no_unsafe_default(&plan));
+    }
+
+    #[test]
+    fn unsafe_cpu_tweaks_are_denied_with_blocked_changes() {
+        let request = CpuGuardrailPlanRequest::with_actions(
+            "plan-cpu-denials",
+            CpuGuardrailAction::ALL.to_vec(),
+        );
+
+        let plan = build_cpu_guardrail_plan(&request);
+
+        assert!(plan.has_denials());
+        assert!(!plan.has_apply_items());
+        assert!(cpu_guardrail_plan_blocks_unsafe_actions(&plan));
+        assert_eq!(plan.items.len(), CpuGuardrailAction::ALL.len());
+
+        for item in &plan.items {
+            assert_eq!(item.action, PlanAction::Deny);
+            assert_eq!(item.mode, TweakMode::Blocked);
+            assert_eq!(item.risk, TweakRisk::Critical);
+            assert_eq!(item.category, TweakCategory::BlockedGuardrail);
+            assert_eq!(item.backup, BackupRequirement::NotRequired);
+            assert_eq!(item.rollback.kind, RollbackKind::NotNeededReadonly);
+            assert_eq!(item.reboot, RebootPolicy::None);
+            assert!(!item.requires_admin);
+            assert_eq!(item.changes.len(), 1);
+            assert_eq!(item.changes[0].operation, TweakOperationKind::Deny);
+            assert_eq!(item.changes[0].scope, SessionScope::Blocked);
+            assert!(!item.warnings.is_empty());
+        }
+    }
+
+    #[test]
+    fn cpu_guardrail_plan_covers_required_denial_ids() {
+        let request = CpuGuardrailPlanRequest::with_actions(
+            "plan-cpu-denials",
+            vec![
+                CpuGuardrailAction::DisableIntelECores,
+                CpuGuardrailAction::DisableSmt,
+                CpuGuardrailAction::DisableSecurityMitigations,
+                CpuGuardrailAction::ForceRealtimePriority,
+                CpuGuardrailAction::ForceHardAffinity,
+                CpuGuardrailAction::AutomaticOverclockOrUndervolt,
+            ],
+        );
+
+        let plan = build_cpu_guardrail_plan(&request);
+        let denied_ids = plan
+            .items
+            .iter()
+            .filter(|item| item.action == PlanAction::Deny)
+            .map(|item| item.tweak_id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            denied_ids,
+            vec![
+                CPU_INTEL_DISABLE_E_CORES_TWEAK_ID,
+                CPU_SMT_DISABLE_TWEAK_ID,
+                CPU_SECURITY_MITIGATIONS_DISABLE_TWEAK_ID,
+                CPU_REALTIME_PRIORITY_TWEAK_ID,
+                CPU_HARD_AFFINITY_TWEAK_ID,
+                BLOCKED_CPU_AUTO_OC_GUARDRAIL_ID,
+            ]
+        );
+    }
+
+    #[test]
+    fn cpu_guardrails_are_idle_until_unsafe_action_is_requested() {
+        let request = CpuGuardrailPlanRequest::new("plan-cpu-idle");
+
+        let plan = build_cpu_guardrail_plan(&request);
+
+        assert!(!plan.has_denials());
+        assert!(!plan.has_apply_items());
+        assert!(cpu_guardrail_plan_blocks_unsafe_actions(&plan));
+        assert!(plan
+            .items
+            .iter()
+            .all(|item| item.action == PlanAction::DetectOnly && item.changes.is_empty()));
     }
 }
