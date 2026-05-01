@@ -124,6 +124,15 @@ type PubgDxChoice = {
   tone: WorkflowTone;
 };
 
+type PubgLaunchOption = {
+  id: string;
+  token: string;
+  reason: string;
+  recommendation: string;
+  backup: string;
+  tone: WorkflowTone;
+};
+
 type BenchmarkPoint = {
   id: string;
   label: string;
@@ -187,6 +196,7 @@ type PubgData = {
   metrics: DashboardMetric[];
   actions: PlanAction[];
   detections: ReadinessSignal[];
+  launchOptions: PubgLaunchOption[];
   dxChoices: PubgDxChoice[];
   checklist: ReadinessSignal[];
 };
@@ -460,6 +470,9 @@ export function PubgWorkflowView({ data }: PubgViewProps) {
           <SignalList items={data.checklist} />
         </Surface>
       </div>
+      <Surface title="Launch option cleanup" eyebrow="Remove legacy flags, keep backup">
+        <PubgLaunchOptionsTable options={data.launchOptions} />
+      </Surface>
       <Surface title="DirectX benchmark choice" eyebrow="No universal forced mode">
         <PubgDxTable choices={data.dxChoices} />
       </Surface>
@@ -770,6 +783,40 @@ function PubgDxTable({ choices }: { choices: PubgDxChoice[] }) {
           <span role="cell">{choice.evidence}</span>
           <span role="cell">{choice.state}</span>
           <span role="cell">{choice.rollback}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PubgLaunchOptionsTable({ options }: { options: PubgLaunchOption[] }) {
+  if (options.length === 0) {
+    return (
+      <StatusRow
+        label="Launch options"
+        value="Clean"
+        detail="No legacy launch flags were detected in the current planner state."
+        tone="success"
+      />
+    );
+  }
+
+  return (
+    <div className="bucket-table" role="table" aria-label="PUBG launch option cleanup plan">
+      <div className="bucket-row bucket-row--head" role="row">
+        <span role="columnheader">Token</span>
+        <span role="columnheader">Reason</span>
+        <span role="columnheader">Recommendation</span>
+        <span role="columnheader">Backup</span>
+      </div>
+      {options.map((option) => (
+        <div className="bucket-row" data-tone={option.tone} role="row" key={option.id}>
+          <span role="cell">
+            <strong>{option.token}</strong>
+          </span>
+          <span role="cell">{option.reason}</span>
+          <span role="cell">{option.recommendation}</span>
+          <span role="cell">{option.backup}</span>
         </div>
       ))}
     </div>

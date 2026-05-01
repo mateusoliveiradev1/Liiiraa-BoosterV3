@@ -40,8 +40,12 @@ pub const PUBG_CONFIG_SNAPSHOT_TYPE: &str = local_store::PUBG_CONFIG_SNAPSHOT_TY
 pub const PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION: &str =
     local_store::PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION;
 
+/// Tweak ID for PUBG launch option cleanup recommendations.
+pub const PUBG_LAUNCH_OPTIONS_TWEAK_ID: &str = "pubg.launch-options.legacy";
+
 /// Launcher family that provided installation metadata.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PubgLauncher {
     /// Steam app manifest and library metadata.
     Steam,
@@ -172,6 +176,159 @@ impl PubgConfigDiscovery {
     }
 }
 
+/// Read-only PUBG launch option discovery and cleanup planning results.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgLaunchOptionsDiscovery {
+    /// Cleanup plans built from accessible launcher metadata.
+    pub plans: Vec<PubgLaunchOptionsCleanupPlan>,
+    /// Non-fatal warnings collected while inspecting launcher metadata.
+    pub warnings: Vec<PubgLaunchOptionsWarning>,
+}
+
+impl PubgLaunchOptionsDiscovery {
+    /// Creates an empty launch option discovery record.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            plans: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Returns true when one or more launch option sources need cleanup.
+    #[must_use]
+    pub fn requires_cleanup(&self) -> bool {
+        self.plans
+            .iter()
+            .any(PubgLaunchOptionsCleanupPlan::requires_cleanup)
+    }
+}
+
+/// A non-fatal warning from launch option discovery.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgLaunchOptionsWarning {
+    /// Launcher metadata path that raised the warning.
+    pub path: PathBuf,
+    /// Human-readable warning detail.
+    pub message: String,
+}
+
+/// Source metadata for one launch option value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgLaunchOptionsSource {
+    /// Launcher family that owns the launch option value.
+    pub launcher: PubgLauncher,
+    /// Launcher metadata path where the value was read.
+    pub path: Option<PathBuf>,
+    /// Steam userdata account directory when the value came from `localconfig.vdf`.
+    pub account_id: Option<String>,
+}
+
+impl PubgLaunchOptionsSource {
+    /// Creates a Steam `localconfig.vdf` source descriptor.
+    #[must_use]
+    pub fn steam_local_config(path: impl Into<PathBuf>, account_id: Option<String>) -> Self {
+        Self {
+            launcher: PubgLauncher::Steam,
+            path: Some(path.into()),
+            account_id,
+        }
+    }
+}
+
+/// Backup payload captured before recommending any launch option cleanup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgLaunchOptionsBackup {
+    /// Current launcher launch options exactly as discovered.
+    pub current_options: String,
+    /// Source metadata path users can return to if cleanup is rejected.
+    pub source_path: Option<PathBuf>,
+    /// User-facing backup note for the cleanup plan.
+    pub note: String,
+}
+
+/// Cleanup plan for old or viral PUBG launch options.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgLaunchOptionsCleanupPlan {
+    /// Tweak identifier from the V1 matrix.
+    pub tweak_id: String,
+    /// Source metadata for the launch options.
+    pub source: PubgLaunchOptionsSource,
+    /// Current launch options exactly as discovered.
+    pub current_options: String,
+    /// Parsed launch option tokens.
+    pub tokens: Vec<String>,
+    /// Legacy or viral flags detected in the parsed tokens.
+    pub findings: Vec<PubgLaunchOptionFinding>,
+    /// Current options with flagged legacy tokens removed and no replacement flags added.
+    pub recommended_options: String,
+    /// Backup details captured before cleanup.
+    pub backup: PubgLaunchOptionsBackup,
+    /// High-level action recommended by the planner.
+    pub action: PubgLaunchOptionsAction,
+    /// User-facing recommendation summary.
+    pub guidance: String,
+}
+
+impl PubgLaunchOptionsCleanupPlan {
+    /// Returns true when cleanup should be offered to the user.
+    #[must_use]
+    pub const fn requires_cleanup(&self) -> bool {
+        matches!(self.action, PubgLaunchOptionsAction::RecommendCleanup)
+    }
+}
+
+/// Action selected by the launch option cleanup planner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PubgLaunchOptionsAction {
+    /// No risky legacy launch options were detected.
+    Noop,
+    /// The user should remove the detected launch options.
+    RecommendCleanup,
+}
+
+/// One detected launch option that should be removed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgLaunchOptionFinding {
+    /// Launch option token that triggered the finding.
+    pub token: String,
+    /// Stable finding class.
+    pub kind: PubgLaunchOptionFindingKind,
+    /// Why the option is legacy or unsafe as a default.
+    pub reason: String,
+    /// Recommended user action.
+    pub recommendation: String,
+}
+
+/// Stable finding class for legacy PUBG launch options.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PubgLaunchOptionFindingKind {
+    /// Old render-path forcing such as `-sm4`, `-d3d10`, or `-dx11`.
+    ForcedRenderer,
+    /// CPU scheduler folklore such as `-USEALLAVAILABLECORES`.
+    CpuSchedulerMyth,
+    /// Process priority forcing such as `-high`.
+    ProcessPriority,
+    /// Memory allocator forcing such as `-malloc=system`.
+    MemoryAllocator,
+    /// Memory ceiling flags such as `-maxMem`.
+    MemoryLimit,
+    /// Thread count forcing such as `-threads`.
+    ThreadCount,
+    /// Deprecated Unreal or launcher-era flags.
+    DeprecatedEngineFlag,
+    /// Source-engine flags copied from non-PUBG tweak packs.
+    SourceEngineFlag,
+}
+
 /// Filesystem roots used by read-only PUBG discovery.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PubgDiscoveryRoots {
@@ -219,6 +376,8 @@ pub struct PubgDiscoveryReport {
     pub installations: Vec<PubgInstallation>,
     /// Config directories and files found in local app data.
     pub config: PubgConfigDiscovery,
+    /// Steam launch options found in accessible launcher metadata.
+    pub launch_options: PubgLaunchOptionsDiscovery,
 }
 
 impl PubgDiscoveryReport {
@@ -302,6 +461,7 @@ pub fn discover_pubg_from_roots(roots: &PubgDiscoveryRoots) -> PubgDiscoveryRepo
     PubgDiscoveryReport {
         installations,
         config: discover_pubg_configs(&roots.local_app_data_roots),
+        launch_options: discover_pubg_launch_options_from_steam_roots(&roots.steam_roots),
     }
 }
 
@@ -625,6 +785,117 @@ pub fn persist_pubg_config_snapshot(
     let record = pubg_config_optimizer_snapshot(snapshot, id, created_at_utc)?;
     store.insert_snapshot(&record)?;
     Ok(record)
+}
+
+/// Discovers PUBG launch options from accessible Steam `localconfig.vdf` files.
+#[must_use]
+pub fn discover_pubg_launch_options_from_steam_roots(
+    steam_roots: &[PathBuf],
+) -> PubgLaunchOptionsDiscovery {
+    let mut plans = Vec::new();
+    let mut warnings = Vec::new();
+
+    for (path, account_id) in steam_local_config_candidates(steam_roots) {
+        let source = PubgLaunchOptionsSource::steam_local_config(path.clone(), account_id);
+        let contents = match fs::read_to_string(&path) {
+            Ok(contents) => contents,
+            Err(error) => {
+                warnings.push(PubgLaunchOptionsWarning {
+                    path,
+                    message: format!("Steam launch options could not be read: {error}"),
+                });
+                continue;
+            }
+        };
+
+        for current_options in pubg_launch_options_from_steam_local_config(&contents) {
+            plans.push(plan_pubg_launch_option_cleanup(
+                source.clone(),
+                current_options,
+            ));
+        }
+    }
+
+    plans.sort_by_key(|plan| launch_options_plan_sort_key(plan));
+    plans.dedup_by_key(|plan| launch_options_plan_sort_key(plan));
+
+    PubgLaunchOptionsDiscovery { plans, warnings }
+}
+
+/// Builds a cleanup plan for one PUBG launch option value.
+#[must_use]
+pub fn plan_pubg_launch_option_cleanup(
+    source: PubgLaunchOptionsSource,
+    current_options: impl Into<String>,
+) -> PubgLaunchOptionsCleanupPlan {
+    let current_options = current_options.into();
+    let tokens = tokenize_pubg_launch_options(&current_options);
+    let (findings, removal_indices) = launch_option_findings(&tokens);
+    let recommended_tokens = tokens
+        .iter()
+        .enumerate()
+        .filter_map(|(index, token)| {
+            if removal_indices.contains(&index) {
+                None
+            } else {
+                Some(token.clone())
+            }
+        })
+        .collect::<Vec<_>>();
+    let recommended_options = serialize_launch_option_tokens(&recommended_tokens);
+    let action = if findings.is_empty() {
+        PubgLaunchOptionsAction::Noop
+    } else {
+        PubgLaunchOptionsAction::RecommendCleanup
+    };
+    let guidance = if findings.is_empty() {
+        "No legacy PUBG launch options were detected; keep launcher options unchanged.".to_owned()
+    } else {
+        "Remove the detected legacy launch options and do not add replacement force flags; use the benchmark flow for renderer choices.".to_owned()
+    };
+    let backup = PubgLaunchOptionsBackup {
+        current_options: current_options.clone(),
+        source_path: source.path.clone(),
+        note: "Current launch options captured before recommending cleanup.".to_owned(),
+    };
+
+    PubgLaunchOptionsCleanupPlan {
+        tweak_id: PUBG_LAUNCH_OPTIONS_TWEAK_ID.to_owned(),
+        source,
+        current_options,
+        tokens,
+        findings,
+        recommended_options,
+        backup,
+        action,
+        guidance,
+    }
+}
+
+/// Splits a launch option string into quote-aware tokens.
+#[must_use]
+pub fn tokenize_pubg_launch_options(raw_options: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+
+    for character in raw_options.chars() {
+        match character {
+            '"' => in_quotes = !in_quotes,
+            character if character.is_whitespace() && !in_quotes => {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(character),
+        }
+    }
+
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+
+    tokens
 }
 
 fn normalized_process_names<I, S>(process_names: I) -> Vec<String>
@@ -1190,6 +1461,259 @@ fn discover_pubg_configs(local_app_data_roots: &[PathBuf]) -> PubgConfigDiscover
     }
 }
 
+fn steam_local_config_candidates(steam_roots: &[PathBuf]) -> Vec<(PathBuf, Option<String>)> {
+    let mut candidates = BTreeSet::new();
+
+    for steam_root in steam_roots {
+        let userdata_dir = steam_root.join("userdata");
+        let Ok(accounts) = fs::read_dir(userdata_dir) else {
+            continue;
+        };
+
+        for account in accounts.flatten() {
+            let account_dir = account.path();
+            if !account_dir.is_dir() {
+                continue;
+            }
+
+            let local_config = account_dir.join("config").join("localconfig.vdf");
+            if local_config.is_file() {
+                let account_id = account_dir
+                    .file_name()
+                    .and_then(|file_name| file_name.to_str())
+                    .map(ToOwned::to_owned);
+                candidates.insert((local_config, account_id));
+            }
+        }
+    }
+
+    candidates.into_iter().collect()
+}
+
+fn pubg_launch_options_from_steam_local_config(source: &str) -> Vec<String> {
+    vdf_blocks_for_key(source, PUBG_STEAM_APP_ID)
+        .into_iter()
+        .filter_map(|block| quoted_metadata_value(block, "LaunchOptions"))
+        .map(|options| options.trim().to_owned())
+        .filter(|options| !options.is_empty())
+        .collect()
+}
+
+fn launch_options_plan_sort_key(plan: &PubgLaunchOptionsCleanupPlan) -> (String, String, String) {
+    (
+        plan.source
+            .path
+            .as_ref()
+            .map_or_else(String::new, |path| path.to_string_lossy().into_owned()),
+        plan.source.account_id.clone().unwrap_or_default(),
+        plan.current_options.clone(),
+    )
+}
+
+fn launch_option_findings(
+    tokens: &[String],
+) -> (Vec<PubgLaunchOptionFinding>, BTreeSet<usize>) {
+    let mut findings = Vec::new();
+    let mut removal_indices = BTreeSet::new();
+
+    for (index, token) in tokens.iter().enumerate() {
+        let normalized = normalized_launch_option_token(token);
+        let Some(kind) = classify_legacy_launch_option(&normalized) else {
+            continue;
+        };
+
+        findings.push(PubgLaunchOptionFinding {
+            token: token.clone(),
+            kind,
+            reason: kind.reason().to_owned(),
+            recommendation: kind.recommendation().to_owned(),
+        });
+        removal_indices.insert(index);
+
+        if launch_option_expects_value(&normalized)
+            && tokens
+                .get(index + 1)
+                .is_some_and(|next| !is_launch_option_flag(next))
+        {
+            removal_indices.insert(index + 1);
+        }
+    }
+
+    (findings, removal_indices)
+}
+
+fn normalized_launch_option_token(token: &str) -> String {
+    let normalized = token.trim().trim_matches('"').to_ascii_lowercase();
+    normalized
+        .split_once('=')
+        .map_or(normalized.clone(), |(flag, _)| flag.to_owned())
+}
+
+fn classify_legacy_launch_option(token: &str) -> Option<PubgLaunchOptionFindingKind> {
+    match token {
+        "-sm4" | "-d3d10" | "-d3d11" | "-d3d12" | "-dx9" | "-dx10" | "-dx11" | "-dx12"
+        | "-force-d3d11" | "-force-d3d12" | "-force-feature-level-10-0" | "-opengl"
+        | "-vulkan" => Some(PubgLaunchOptionFindingKind::ForcedRenderer),
+        "-useallavailablecores" => Some(PubgLaunchOptionFindingKind::CpuSchedulerMyth),
+        "-high" | "-realtime" | "-priority" => Some(PubgLaunchOptionFindingKind::ProcessPriority),
+        "-malloc" => Some(PubgLaunchOptionFindingKind::MemoryAllocator),
+        "-heapsize" | "-maxmem" => Some(PubgLaunchOptionFindingKind::MemoryLimit),
+        "-cpu-count" | "-cpucount" | "-thread" | "-threads" => {
+            Some(PubgLaunchOptionFindingKind::ThreadCount)
+        }
+        "-freq" | "-lowmemory" | "-nomansky" | "-notexturestreaming" | "-novid" | "-nosplash"
+        | "-refresh" => Some(PubgLaunchOptionFindingKind::DeprecatedEngineFlag),
+        "+cl_forcepreload" | "+mat_queue_mode" => Some(PubgLaunchOptionFindingKind::SourceEngineFlag),
+        _ => None,
+    }
+}
+
+fn launch_option_expects_value(token: &str) -> bool {
+    matches!(
+        token,
+        "-cpu-count"
+            | "-cpucount"
+            | "-freq"
+            | "-heapsize"
+            | "-malloc"
+            | "-maxmem"
+            | "-priority"
+            | "-refresh"
+            | "-thread"
+            | "-threads"
+            | "+cl_forcepreload"
+            | "+mat_queue_mode"
+    )
+}
+
+fn is_launch_option_flag(token: &str) -> bool {
+    token.starts_with('-') || token.starts_with('+')
+}
+
+fn serialize_launch_option_tokens(tokens: &[String]) -> String {
+    tokens
+        .iter()
+        .map(|token| {
+            if token.chars().any(char::is_whitespace) {
+                format!("\"{}\"", token.replace('"', "\\\""))
+            } else {
+                token.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+impl PubgLaunchOptionFindingKind {
+    fn reason(self) -> &'static str {
+        match self {
+            Self::ForcedRenderer => {
+                "Forced render path flags are legacy, machine-specific, and should be benchmarked instead."
+            }
+            Self::CpuSchedulerMyth => {
+                "Windows already schedules PUBG across available cores; this flag is old tuning folklore."
+            }
+            Self::ProcessPriority => {
+                "Forcing process priority can starve system work and is blocked as a default optimization."
+            }
+            Self::MemoryAllocator => {
+                "Allocator launch flags are unsupported for current PUBG and can create stability risk."
+            }
+            Self::MemoryLimit => {
+                "Memory ceiling flags are legacy tweaks that can reduce stability on modern systems."
+            }
+            Self::ThreadCount => {
+                "Manual thread counts can fight the Windows scheduler and modern CPU topology."
+            }
+            Self::DeprecatedEngineFlag => {
+                "This old launch flag is not part of the approved PUBG V1 optimization path."
+            }
+            Self::SourceEngineFlag => {
+                "This flag belongs to Source-engine tweak packs and is not a PUBG optimization."
+            }
+        }
+    }
+
+    fn recommendation(self) -> &'static str {
+        match self {
+            Self::ForcedRenderer => {
+                "Remove this flag and compare DirectX modes through the benchmark flow."
+            }
+            Self::CpuSchedulerMyth
+            | Self::MemoryAllocator
+            | Self::MemoryLimit
+            | Self::ThreadCount
+            | Self::DeprecatedEngineFlag
+            | Self::SourceEngineFlag => "Remove this flag without adding a replacement.",
+            Self::ProcessPriority => {
+                "Remove this flag; priority forcing remains blocked outside future benchmarked lab work."
+            }
+        }
+    }
+}
+
+fn vdf_blocks_for_key<'a>(source: &'a str, key: &str) -> Vec<&'a str> {
+    let needle = format!("\"{key}\"");
+    let mut blocks = Vec::new();
+    let mut search_start = 0;
+
+    while let Some(relative_index) = source[search_start..].find(&needle) {
+        let key_start = search_start + relative_index;
+        let after_key = key_start + needle.len();
+        let Some(relative_open_brace) = source[after_key..].find('{') else {
+            break;
+        };
+        let open_brace = after_key + relative_open_brace;
+
+        if !source[after_key..open_brace].trim().is_empty() {
+            search_start = after_key;
+            continue;
+        }
+
+        if let Some(close_brace) = matching_vdf_brace(source, open_brace) {
+            blocks.push(&source[open_brace + 1..close_brace]);
+            search_start = close_brace + 1;
+        } else {
+            break;
+        }
+    }
+
+    blocks
+}
+
+fn matching_vdf_brace(source: &str, open_brace: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_quotes = false;
+    let mut escaped = false;
+
+    for (offset, character) in source[open_brace..].char_indices() {
+        if in_quotes {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_quotes = false;
+            }
+            continue;
+        }
+
+        match character {
+            '"' => in_quotes = true,
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(open_brace + offset);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
 fn quoted_metadata_value(source: &str, key: &str) -> Option<String> {
     quoted_metadata_values(source, key).into_iter().next()
 }
@@ -1406,6 +1930,164 @@ sg.AntiAliasingQuality=1
             .pubg_config_snapshots()
             .expect("PUBG snapshots should be listed");
         assert_eq!(stored, vec![record]);
+    }
+
+    #[test]
+    fn plans_launch_option_cleanup_without_forced_replacements() {
+        let source = PubgLaunchOptionsSource::steam_local_config(
+            "localconfig.vdf",
+            Some("123456".to_owned()),
+        );
+        let plan = plan_pubg_launch_option_cleanup(
+            source,
+            "-USEALLAVAILABLECORES -malloc=system -high -dx11 -threads 8 -novid -safe-note",
+        );
+
+        assert!(plan.requires_cleanup());
+        assert_eq!(plan.tweak_id, PUBG_LAUNCH_OPTIONS_TWEAK_ID);
+        assert_eq!(plan.action, PubgLaunchOptionsAction::RecommendCleanup);
+        assert_eq!(plan.recommended_options, "-safe-note");
+        assert_eq!(plan.backup.current_options, plan.current_options);
+        assert!(plan.guidance.contains("do not add replacement force flags"));
+        assert_eq!(
+            plan.findings
+                .iter()
+                .map(|finding| finding.kind)
+                .collect::<Vec<_>>(),
+            vec![
+                PubgLaunchOptionFindingKind::CpuSchedulerMyth,
+                PubgLaunchOptionFindingKind::MemoryAllocator,
+                PubgLaunchOptionFindingKind::ProcessPriority,
+                PubgLaunchOptionFindingKind::ForcedRenderer,
+                PubgLaunchOptionFindingKind::ThreadCount,
+                PubgLaunchOptionFindingKind::DeprecatedEngineFlag,
+            ]
+        );
+        assert!(plan
+            .findings
+            .iter()
+            .all(|finding| finding.recommendation.starts_with("Remove")));
+    }
+
+    #[test]
+    fn tokenizes_quoted_launch_options_for_cleanup() {
+        let tokens = tokenize_pubg_launch_options(r#"-dx11 "-custom value" +mat_queue_mode 2"#);
+
+        assert_eq!(
+            tokens,
+            vec![
+                "-dx11".to_owned(),
+                "-custom value".to_owned(),
+                "+mat_queue_mode".to_owned(),
+                "2".to_owned(),
+            ]
+        );
+
+        let plan = plan_pubg_launch_option_cleanup(
+            PubgLaunchOptionsSource::steam_local_config("localconfig.vdf", None),
+            r#"-dx11 "-custom value" +mat_queue_mode 2"#,
+        );
+
+        assert_eq!(plan.recommended_options, "\"-custom value\"");
+    }
+
+    #[test]
+    fn discovers_steam_launch_options_from_localconfig_fixture() {
+        let fixture = FixtureDir::new("launch-options");
+        let steam_root = fixture.path().join("Steam");
+        let local_config = steam_root
+            .join("userdata")
+            .join("123456")
+            .join("config")
+            .join("localconfig.vdf");
+
+        write_file(
+            &local_config,
+            r#""UserLocalConfigStore"
+{
+    "Software"
+    {
+        "Valve"
+        {
+            "Steam"
+            {
+                "apps"
+                {
+                    "578080"
+                    {
+                        "LaunchOptions" "-sm4 -USEALLAVAILABLECORES -safe-note"
+                    }
+                    "730"
+                    {
+                        "LaunchOptions" "-allow_third_party_software"
+                    }
+                }
+            }
+        }
+    }
+}"#,
+        );
+
+        let discovery = discover_pubg_launch_options_from_steam_roots(&[steam_root]);
+
+        assert!(discovery.requires_cleanup());
+        assert!(discovery.warnings.is_empty());
+        assert_eq!(discovery.plans.len(), 1);
+        assert_eq!(
+            discovery.plans[0].source.path.as_deref(),
+            Some(local_config.as_path())
+        );
+        assert_eq!(
+            discovery.plans[0].source.account_id.as_deref(),
+            Some("123456")
+        );
+        assert_eq!(discovery.plans[0].recommended_options, "-safe-note");
+        assert_eq!(
+            discovery.plans[0]
+                .findings
+                .iter()
+                .map(|finding| finding.token.as_str())
+                .collect::<Vec<_>>(),
+            vec!["-sm4", "-USEALLAVAILABLECORES"]
+        );
+    }
+
+    #[test]
+    fn ignores_other_steam_app_launch_options() {
+        let fixture = FixtureDir::new("other-launch-options");
+        let steam_root = fixture.path().join("Steam");
+
+        write_file(
+            steam_root
+                .join("userdata")
+                .join("123456")
+                .join("config")
+                .join("localconfig.vdf"),
+            r#""UserLocalConfigStore"
+{
+    "Software"
+    {
+        "Valve"
+        {
+            "Steam"
+            {
+                "apps"
+                {
+                    "730"
+                    {
+                        "LaunchOptions" "-high"
+                    }
+                }
+            }
+        }
+    }
+}"#,
+        );
+
+        let discovery = discover_pubg_launch_options_from_steam_roots(&[steam_root]);
+
+        assert!(discovery.plans.is_empty());
+        assert!(!discovery.requires_cleanup());
     }
 
     #[test]
