@@ -123,6 +123,36 @@ export interface OptimizationWorkflowPubgDxChoice {
   tone: OptimizationWorkflowTone;
 }
 
+export interface OptimizationWorkflowPubgDxBenchmarkStep {
+  id: string;
+  label: string;
+  detail: string;
+  state: "active" | "complete" | "pending";
+  tone: OptimizationWorkflowTone;
+}
+
+export interface OptimizationWorkflowPubgDxBenchmarkResult {
+  id: string;
+  label: string;
+  averageFps: number;
+  onePercentLow: number;
+  pointOnePercentLow: number;
+  p95FrameMs: number;
+  droppedFrames: number;
+  verdict: string;
+  tone: OptimizationWorkflowTone;
+}
+
+export interface OptimizationWorkflowPubgDxBenchmark {
+  currentMode: string;
+  selectedMode: string;
+  rationale: string;
+  varianceBand: string;
+  steps: OptimizationWorkflowPubgDxBenchmarkStep[];
+  results: OptimizationWorkflowPubgDxBenchmarkResult[];
+  metadata: Array<[string, string]>;
+}
+
 export interface OptimizationWorkflowBenchmarkPoint {
   id: string;
   label: string;
@@ -151,6 +181,7 @@ export interface OptimizationWorkflowGaming {
     actions: OptimizationWorkflowAction[];
     detections: OptimizationWorkflowSignal[];
     dxChoices: OptimizationWorkflowPubgDxChoice[];
+    dxBenchmark: OptimizationWorkflowPubgDxBenchmark;
     checklist: OptimizationWorkflowSignal[];
   };
   benchmarks: {

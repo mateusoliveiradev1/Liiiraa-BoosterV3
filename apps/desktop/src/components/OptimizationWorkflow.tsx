@@ -124,6 +124,36 @@ type PubgDxChoice = {
   tone: WorkflowTone;
 };
 
+type PubgDxBenchmarkStep = {
+  id: string;
+  label: string;
+  detail: string;
+  state: "active" | "complete" | "pending";
+  tone: WorkflowTone;
+};
+
+type PubgDxBenchmarkResult = {
+  id: string;
+  label: string;
+  averageFps: number;
+  onePercentLow: number;
+  pointOnePercentLow: number;
+  p95FrameMs: number;
+  droppedFrames: number;
+  verdict: string;
+  tone: WorkflowTone;
+};
+
+type PubgDxBenchmark = {
+  currentMode: string;
+  selectedMode: string;
+  rationale: string;
+  varianceBand: string;
+  steps: PubgDxBenchmarkStep[];
+  results: PubgDxBenchmarkResult[];
+  metadata: Array<[string, string]>;
+};
+
 type PubgLaunchOption = {
   id: string;
   token: string;
@@ -198,6 +228,7 @@ type PubgData = {
   detections: ReadinessSignal[];
   launchOptions: PubgLaunchOption[];
   dxChoices: PubgDxChoice[];
+  dxBenchmark: PubgDxBenchmark;
   checklist: ReadinessSignal[];
 };
 
@@ -476,6 +507,14 @@ export function PubgWorkflowView({ data }: PubgViewProps) {
       <Surface title="DirectX benchmark choice" eyebrow="No universal forced mode">
         <PubgDxTable choices={data.dxChoices} />
       </Surface>
+      <div style={twoColumnStyle}>
+        <Surface title="DX benchmark flow" eyebrow="Config snapshot before recommendation">
+          <PubgDxBenchmarkFlow benchmark={data.dxBenchmark} />
+        </Surface>
+        <Surface title="Measured rationale" eyebrow="Variance-aware recommendation">
+          <PubgDxBenchmarkResults benchmark={data.dxBenchmark} />
+        </Surface>
+      </div>
     </div>
   );
 }
@@ -783,6 +822,53 @@ function PubgDxTable({ choices }: { choices: PubgDxChoice[] }) {
           <span role="cell">{choice.evidence}</span>
           <span role="cell">{choice.state}</span>
           <span role="cell">{choice.rollback}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PubgDxBenchmarkFlow({ benchmark }: { benchmark: PubgDxBenchmark }) {
+  return (
+    <div style={compactRowStyle}>
+      <DefinitionGrid
+        items={[
+          ["Current", benchmark.currentMode],
+          ["Selected", benchmark.selectedMode],
+          ["Variance", benchmark.varianceBand],
+          ["Policy", benchmark.rationale]
+        ]}
+      />
+      <FlowList items={benchmark.steps} />
+      <DefinitionGrid items={benchmark.metadata} />
+    </div>
+  );
+}
+
+function PubgDxBenchmarkResults({ benchmark }: { benchmark: PubgDxBenchmark }) {
+  return (
+    <div className="bucket-table" role="table" aria-label="PUBG DirectX benchmark result rationale">
+      <div className="bucket-row bucket-row--head" role="row">
+        <span role="columnheader">Mode</span>
+        <span role="columnheader">FPS</span>
+        <span role="columnheader">Frame time</span>
+        <span role="columnheader">Verdict</span>
+      </div>
+      {benchmark.results.map((result) => (
+        <div className="bucket-row" data-tone={result.tone} role="row" key={result.id}>
+          <span role="cell">
+            <strong>{result.label}</strong>
+            <small>0.1% low {result.pointOnePercentLow} FPS</small>
+          </span>
+          <span role="cell">
+            {result.averageFps} avg
+            <small>{result.onePercentLow} FPS 1% low</small>
+          </span>
+          <span role="cell">
+            p95 {result.p95FrameMs} ms
+            <small>{result.droppedFrames} dropped frames</small>
+          </span>
+          <span role="cell">{result.verdict}</span>
         </div>
       ))}
     </div>

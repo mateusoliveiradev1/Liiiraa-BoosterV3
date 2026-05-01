@@ -812,7 +812,7 @@ export const optimizationWorkflow = {
         {
           id: "dx11e",
           label: "DX11 Enhanced",
-          evidence: "Candidate for modern CPUs after stability check.",
+          evidence: "Candidate only after measured 1% lows and p95 frametime clear variance.",
           rollback: "Restore prior render mode",
           state: "Benchmark required",
           tone: "warning"
@@ -820,7 +820,7 @@ export const optimizationWorkflow = {
         {
           id: "dx11",
           label: "DX11",
-          evidence: "Baseline path for compatibility comparison.",
+          evidence: "Compatibility baseline for the same map, route, and duration.",
           rollback: "Restore prior render mode",
           state: "Benchmark required",
           tone: "active"
@@ -834,6 +834,81 @@ export const optimizationWorkflow = {
           tone: "lab"
         }
       ],
+      dxBenchmark: {
+        currentMode: "DX11",
+        selectedMode: "Pending evidence",
+        rationale:
+          "No universal forced default: keep the current render mode unless DX11 or DX11 Enhanced wins outside the variance band with no stability blocker.",
+        varianceBand: "3%",
+        steps: [
+          {
+            id: "snapshot-config",
+            label: "Snapshot config",
+            detail: "Back up the current render mode before any comparison.",
+            state: "complete",
+            tone: "success"
+          },
+          {
+            id: "capture-dx11",
+            label: "Capture DX11",
+            detail: "Run the same route and duration as the compatibility baseline.",
+            state: "active",
+            tone: "active"
+          },
+          {
+            id: "capture-dx11e",
+            label: "Capture DX11 Enhanced",
+            detail: "Repeat the capture after user-controlled mode selection.",
+            state: "pending",
+            tone: "warning"
+          },
+          {
+            id: "compare",
+            label: "Compare",
+            detail: "Use native FPS, 1% lows, 0.1% lows, p95 frametime, dropped frames, and stability notes.",
+            state: "pending",
+            tone: "neutral"
+          },
+          {
+            id: "recommend",
+            label: "Recommend",
+            detail: "Recommend only the mode that wins outside variance; otherwise keep current.",
+            state: "pending",
+            tone: "neutral"
+          }
+        ],
+        results: [
+          {
+            id: "dx11",
+            label: "DX11 baseline",
+            averageFps: 176,
+            onePercentLow: 127,
+            pointOnePercentLow: 92,
+            p95FrameMs: 10.2,
+            droppedFrames: 4,
+            verdict: "Baseline",
+            tone: "active"
+          },
+          {
+            id: "dx11e",
+            label: "DX11 Enhanced",
+            averageFps: 181,
+            onePercentLow: 139,
+            pointOnePercentLow: 99,
+            p95FrameMs: 9.5,
+            droppedFrames: 2,
+            verdict: "Candidate wins after stability pass",
+            tone: "success"
+          }
+        ],
+        metadata: [
+          ["Route", "Same map/replay route"],
+          ["Duration", "Same capture length"],
+          ["Driver", "Same GPU driver"],
+          ["Power plan", "Same Windows power plan"],
+          ["Frames", "Native frames only"]
+        ]
+      },
       checklist: [
         {
           id: "visibility",
@@ -1090,6 +1165,20 @@ export function assertOptimizationWorkflowSmoke(workflow = optimizationWorkflow)
     throw new Error("PUBG surface must show anti-cheat boundaries.");
   }
 
+  const dxResults = new Set(gaming.pubg.dxBenchmark.results.map((result) => result.id));
+  if (!dxResults.has("dx11") || !dxResults.has("dx11e")) {
+    throw new Error("PUBG DX benchmark flow must compare DX11 and DX11 Enhanced.");
+  }
+
+  if (!/No universal forced default/i.test(gaming.pubg.dxBenchmark.rationale)) {
+    throw new Error("PUBG DX benchmark flow must reject a universal forced default.");
+  }
+
+  const defaultedDxChoice = gaming.pubg.dxChoices.find((choice) => /default selected/i.test(choice.state));
+  if (defaultedDxChoice) {
+    throw new Error(`PUBG DX choice must not be default-selected: ${defaultedDxChoice.label}`);
+  }
+
   if (gaming.benchmarks.chart.length < 2 || gaming.benchmarks.metadata.length === 0) {
     throw new Error("Benchmark surface must include comparison data and metadata.");
   }
@@ -1315,6 +1404,17 @@ export function renderOptimizationWorkflowSmokeHtml(workflow = optimizationWorkf
           <section class="panel">
             <h2>PUBG</h2>
             ${renderStatusRows(workflow.gaming.pubg.detections)}
+            ${workflow.gaming.pubg.dxBenchmark.results
+              .map(
+                (result) => `
+                <div class="row" data-tone="${result.tone}">
+                  <b>${result.label}</b>
+                  <span>${result.averageFps} avg / ${result.onePercentLow} FPS 1% low</span>
+                  <span>p95 ${result.p95FrameMs} ms / ${result.droppedFrames} dropped</span>
+                  <span>${result.verdict}</span>
+                </div>`
+              )
+              .join("")}
             ${renderStatusRows(workflow.gaming.pubg.checklist)}
           </section>
           <section class="panel">

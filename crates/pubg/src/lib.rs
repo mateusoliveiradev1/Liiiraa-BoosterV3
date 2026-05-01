@@ -1,5 +1,9 @@
 //! PUBG discovery, settings inspection, and safe recommendation planning.
 
+use benchmark::{
+    compare_benchmark_runs, BenchmarkComparisonSummary, BenchmarkDecision, BenchmarkRunSummary,
+    DEFAULT_BENCHMARK_VARIANCE_PERCENT,
+};
 use local_store::{LocalStore, OptimizerSnapshot};
 use serde::Serialize;
 use std::{
@@ -42,6 +46,12 @@ pub const PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION: &str =
 
 /// Tweak ID for PUBG launch option cleanup recommendations.
 pub const PUBG_LAUNCH_OPTIONS_TWEAK_ID: &str = "pubg.launch-options.legacy";
+
+/// Tweak ID for the PUBG DX11 versus DX11 Enhanced benchmark flow.
+pub const PUBG_DX_MODE_TWEAK_ID: &str = "pubg.dx11-vs-dx11e";
+
+/// Variance band used until repeated-run confidence modeling is added.
+pub const PUBG_DX_BENCHMARK_VARIANCE_PERCENT: f64 = DEFAULT_BENCHMARK_VARIANCE_PERCENT;
 
 /// Launcher family that provided installation metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -329,6 +339,213 @@ pub enum PubgLaunchOptionFindingKind {
     SourceEngineFlag,
 }
 
+/// PUBG DirectX render modes that can appear in the benchmark flow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PubgDirectXMode {
+    /// DirectX 11 compatibility renderer.
+    Dx11,
+    /// DirectX 11 Enhanced renderer exposed by PUBG.
+    Dx11Enhanced,
+    /// DirectX 12 is lab-only when exposed by the game.
+    Dx12,
+}
+
+impl PubgDirectXMode {
+    /// Returns a stable machine-readable render mode label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Dx11 => "dx11",
+            Self::Dx11Enhanced => "dx11_enhanced",
+            Self::Dx12 => "dx12",
+        }
+    }
+
+    /// Returns a user-facing render mode label.
+    #[must_use]
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Dx11 => "DX11",
+            Self::Dx11Enhanced => "DX11 Enhanced",
+            Self::Dx12 => "DX12",
+        }
+    }
+}
+
+/// One step in the PUBG DirectX benchmark flow.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgDirectXBenchmarkStep {
+    /// Stable step identifier.
+    pub id: String,
+    /// User-facing step label.
+    pub label: String,
+    /// Why the step exists in the flow.
+    pub detail: String,
+}
+
+/// One benchmarkable DirectX mode choice.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgDirectXBenchmarkChoice {
+    /// Render mode represented by this choice.
+    pub mode: PubgDirectXMode,
+    /// Current workflow state for the choice.
+    pub state: String,
+    /// Why this choice is present.
+    pub rationale: String,
+    /// Rollback behavior after testing this choice.
+    pub rollback: String,
+    /// Whether this mode is apply-enabled before benchmark evidence exists.
+    pub apply_by_default: bool,
+}
+
+/// PUBG DirectX benchmark plan shown before any mode recommendation is made.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgDirectXBenchmarkPlan {
+    /// Tweak identifier from the V1 matrix.
+    pub tweak_id: String,
+    /// Current render mode if the config snapshot exposes it.
+    pub current_mode: Option<PubgDirectXMode>,
+    /// Explicitly empty universal default to prevent forced renderer behavior.
+    pub universal_forced_default: Option<PubgDirectXMode>,
+    /// Modes included in the benchmark comparison.
+    pub choices: Vec<PubgDirectXBenchmarkChoice>,
+    /// Ordered flow steps required before a recommendation.
+    pub steps: Vec<PubgDirectXBenchmarkStep>,
+    /// Metadata that must match across before/after runs.
+    pub metadata_requirements: Vec<String>,
+    /// Guardrails that keep the flow anti-cheat safe.
+    pub guardrails: Vec<String>,
+}
+
+/// One measured PUBG DirectX benchmark run.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgDirectXBenchmarkRun {
+    /// Render mode used for this run.
+    pub mode: PubgDirectXMode,
+    /// Average native frames per second.
+    pub average_fps: f64,
+    /// One percent low native frames per second.
+    pub one_percent_low_fps: f64,
+    /// Point-one percent low native frames per second.
+    pub point_one_percent_low_fps: f64,
+    /// P95 frametime in milliseconds.
+    pub p95_frame_ms: f64,
+    /// Dropped or delayed frame count where capture tooling exposes it.
+    pub dropped_frames: u32,
+    /// Stability notes such as crashes, hitch clusters, or failed replay consistency.
+    pub stability_notes: Vec<String>,
+}
+
+impl PubgDirectXBenchmarkRun {
+    /// Creates a benchmark run for a PUBG DirectX mode.
+    #[must_use]
+    pub fn new(
+        mode: PubgDirectXMode,
+        average_fps: f64,
+        one_percent_low_fps: f64,
+        point_one_percent_low_fps: f64,
+        p95_frame_ms: f64,
+        dropped_frames: u32,
+    ) -> Self {
+        Self {
+            mode,
+            average_fps,
+            one_percent_low_fps,
+            point_one_percent_low_fps,
+            p95_frame_ms,
+            dropped_frames,
+            stability_notes: Vec::new(),
+        }
+    }
+
+    /// Adds one stability note to the run.
+    #[must_use]
+    pub fn with_stability_note(mut self, note: impl Into<String>) -> Self {
+        self.stability_notes.push(note.into());
+        self
+    }
+
+    fn benchmark_summary(&self) -> BenchmarkRunSummary {
+        self.stability_notes.iter().fold(
+            BenchmarkRunSummary::new(
+                self.mode.display_name(),
+                self.average_fps,
+                self.one_percent_low_fps,
+                self.point_one_percent_low_fps,
+                self.p95_frame_ms,
+                self.dropped_frames,
+            ),
+            |summary, note| summary.with_stability_warning(note.clone()),
+        )
+    }
+}
+
+/// Action selected after comparing PUBG DirectX benchmark runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PubgDirectXRecommendationAction {
+    /// DX11 Enhanced should be selected based on benchmark evidence.
+    RecommendDx11Enhanced,
+    /// DX11 should be selected based on benchmark or stability evidence.
+    RecommendDx11,
+    /// Current mode should be kept because results are too close to call.
+    KeepCurrent,
+}
+
+/// PUBG DirectX benchmark comparison deltas for UI and telemetry.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgDirectXBenchmarkComparison {
+    /// Average FPS percent delta for DX11 Enhanced versus DX11.
+    pub average_fps_delta_percent: f64,
+    /// One percent low FPS percent delta for DX11 Enhanced versus DX11.
+    pub one_percent_low_delta_percent: f64,
+    /// Point-one percent low FPS percent delta for DX11 Enhanced versus DX11.
+    pub point_one_percent_low_delta_percent: f64,
+    /// P95 frametime percent delta for DX11 Enhanced versus DX11.
+    pub p95_frame_time_delta_percent: f64,
+    /// Dropped frame delta for DX11 Enhanced versus DX11.
+    pub dropped_frame_delta: i64,
+    /// Variance band used for the recommendation.
+    pub variance_percent: f64,
+}
+
+impl From<BenchmarkComparisonSummary> for PubgDirectXBenchmarkComparison {
+    fn from(summary: BenchmarkComparisonSummary) -> Self {
+        Self {
+            average_fps_delta_percent: summary.average_fps_delta_percent,
+            one_percent_low_delta_percent: summary.one_percent_low_delta_percent,
+            point_one_percent_low_delta_percent: summary.point_one_percent_low_delta_percent,
+            p95_frame_time_delta_percent: summary.p95_frame_time_delta_percent,
+            dropped_frame_delta: summary.dropped_frame_delta,
+            variance_percent: summary.variance_percent,
+        }
+    }
+}
+
+/// Recommendation produced by the PUBG DirectX benchmark flow.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgDirectXBenchmarkRecommendation {
+    /// Tweak identifier from the V1 matrix.
+    pub tweak_id: String,
+    /// Action selected after comparing runs.
+    pub action: PubgDirectXRecommendationAction,
+    /// Render mode recommended after benchmark evidence.
+    pub recommended_mode: PubgDirectXMode,
+    /// Human-readable benchmark rationale.
+    pub rationale: String,
+    /// Rollback behavior for the selected mode.
+    pub rollback: String,
+    /// Comparison deltas attached to the recommendation.
+    pub comparison: PubgDirectXBenchmarkComparison,
+}
+
 /// Filesystem roots used by read-only PUBG discovery.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PubgDiscoveryRoots {
@@ -462,6 +679,155 @@ pub fn discover_pubg_from_roots(roots: &PubgDiscoveryRoots) -> PubgDiscoveryRepo
         installations,
         config: discover_pubg_configs(&roots.local_app_data_roots),
         launch_options: discover_pubg_launch_options_from_steam_roots(&roots.steam_roots),
+    }
+}
+
+/// Builds the PUBG DX11 versus DX11 Enhanced benchmark plan without forcing a default.
+#[must_use]
+pub fn plan_pubg_directx_benchmark(
+    current_mode: Option<PubgDirectXMode>,
+) -> PubgDirectXBenchmarkPlan {
+    let choices = [PubgDirectXMode::Dx11, PubgDirectXMode::Dx11Enhanced]
+        .into_iter()
+        .map(|mode| PubgDirectXBenchmarkChoice {
+            mode,
+            state: directx_choice_state(mode, current_mode),
+            rationale: match mode {
+                PubgDirectXMode::Dx11 => {
+                    "Compatibility baseline for the same map, route, and capture duration."
+                        .to_owned()
+                }
+                PubgDirectXMode::Dx11Enhanced => {
+                    "Candidate mode for modern systems, accepted only with measured stability."
+                        .to_owned()
+                }
+                PubgDirectXMode::Dx12 => "Lab-only mode outside the T073 comparison.".to_owned(),
+            },
+            rollback: "Restore the render mode captured before the benchmark.".to_owned(),
+            apply_by_default: false,
+        })
+        .collect();
+
+    PubgDirectXBenchmarkPlan {
+        tweak_id: PUBG_DX_MODE_TWEAK_ID.to_owned(),
+        current_mode,
+        universal_forced_default: None,
+        choices,
+        steps: vec![
+            directx_step(
+                "snapshot-config",
+                "Snapshot config",
+                "Capture the current render mode before suggesting or testing alternatives.",
+            ),
+            directx_step(
+                "capture-dx11",
+                "Capture DX11",
+                "Run the same route and duration with DX11 as the compatibility baseline.",
+            ),
+            directx_step(
+                "capture-dx11-enhanced",
+                "Capture DX11 Enhanced",
+                "Repeat the run with DX11 Enhanced after user-controlled mode selection.",
+            ),
+            directx_step(
+                "compare-stability",
+                "Compare stability",
+                "Compare native FPS, 1% lows, 0.1% lows, p95 frametime, and dropped frames.",
+            ),
+            directx_step(
+                "recommend-or-keep",
+                "Recommend or keep current",
+                "Recommend a mode only when the result clears the variance band and has no stability blocker.",
+            ),
+        ],
+        metadata_requirements: vec![
+            "same map or replay route".to_owned(),
+            "same capture duration".to_owned(),
+            "same driver version".to_owned(),
+            "same Windows build and power plan".to_owned(),
+            "native frames only, generated frames labeled separately".to_owned(),
+        ],
+        guardrails: vec![
+            "no PUBG binaries, content folders, BattlEye files, or game memory are modified"
+                .to_owned(),
+            "no Steam launch renderer flags are added as replacements".to_owned(),
+            "previous render mode remains rollbackable from the config snapshot".to_owned(),
+        ],
+    }
+}
+
+/// Recommends DX11 or DX11 Enhanced only after comparing benchmark evidence.
+#[must_use]
+pub fn recommend_pubg_directx_mode(
+    current_mode: PubgDirectXMode,
+    dx11_run: &PubgDirectXBenchmarkRun,
+    dx11_enhanced_run: &PubgDirectXBenchmarkRun,
+) -> PubgDirectXBenchmarkRecommendation {
+    let comparison = compare_benchmark_runs(
+        &dx11_run.benchmark_summary(),
+        &dx11_enhanced_run.benchmark_summary(),
+        PUBG_DX_BENCHMARK_VARIANCE_PERCENT,
+    );
+
+    let (action, recommended_mode, rationale) = match comparison.decision {
+        BenchmarkDecision::PreferCandidate => (
+            PubgDirectXRecommendationAction::RecommendDx11Enhanced,
+            PubgDirectXMode::Dx11Enhanced,
+            format!(
+                "DX11 Enhanced improved 1% lows by {:.1}% with p95 frametime delta {:.1}% and no stability blocker.",
+                comparison.one_percent_low_delta_percent,
+                comparison.p95_frame_time_delta_percent
+            ),
+        ),
+        BenchmarkDecision::KeepBaseline => (
+            PubgDirectXRecommendationAction::RecommendDx11,
+            PubgDirectXMode::Dx11,
+            format!(
+                "DX11 remains the safer recommendation because DX11 Enhanced regressed or raised stability warnings; 1% low delta {:.1}%, p95 delta {:.1}%, dropped frame delta {}.",
+                comparison.one_percent_low_delta_percent,
+                comparison.p95_frame_time_delta_percent,
+                comparison.dropped_frame_delta
+            ),
+        ),
+        BenchmarkDecision::Inconclusive => (
+            PubgDirectXRecommendationAction::KeepCurrent,
+            current_mode,
+            format!(
+                "Results stayed inside the {:.1}% variance band, so the app keeps the current mode instead of forcing a universal default.",
+                comparison.variance_percent
+            ),
+        ),
+    };
+
+    PubgDirectXBenchmarkRecommendation {
+        tweak_id: PUBG_DX_MODE_TWEAK_ID.to_owned(),
+        action,
+        recommended_mode,
+        rationale,
+        rollback: format!(
+            "Restore previous render mode ({}) from the pre-benchmark config snapshot.",
+            current_mode.display_name()
+        ),
+        comparison: comparison.into(),
+    }
+}
+
+fn directx_step(id: &str, label: &str, detail: &str) -> PubgDirectXBenchmarkStep {
+    PubgDirectXBenchmarkStep {
+        id: id.to_owned(),
+        label: label.to_owned(),
+        detail: detail.to_owned(),
+    }
+}
+
+fn directx_choice_state(
+    mode: PubgDirectXMode,
+    current_mode: Option<PubgDirectXMode>,
+) -> String {
+    match current_mode {
+        Some(current_mode) if current_mode == mode => "Current baseline, benchmark required".to_owned(),
+        Some(_) => "Candidate, benchmark required".to_owned(),
+        None => "Unknown current mode, benchmark required".to_owned(),
     }
 }
 
@@ -2050,6 +2416,124 @@ sg.AntiAliasingQuality=1
                 .collect::<Vec<_>>(),
             vec!["-sm4", "-USEALLAVAILABLECORES"]
         );
+    }
+
+    #[test]
+    fn directx_benchmark_plan_has_no_forced_default() {
+        let plan = plan_pubg_directx_benchmark(Some(PubgDirectXMode::Dx11));
+
+        assert_eq!(plan.tweak_id, PUBG_DX_MODE_TWEAK_ID);
+        assert_eq!(plan.universal_forced_default, None);
+        assert_eq!(
+            plan.choices
+                .iter()
+                .map(|choice| choice.mode)
+                .collect::<Vec<_>>(),
+            vec![PubgDirectXMode::Dx11, PubgDirectXMode::Dx11Enhanced]
+        );
+        assert!(plan.choices.iter().all(|choice| !choice.apply_by_default));
+        assert!(plan
+            .guardrails
+            .iter()
+            .any(|guardrail| guardrail.contains("BattlEye")));
+        assert!(plan
+            .metadata_requirements
+            .iter()
+            .any(|requirement| requirement.contains("native frames")));
+    }
+
+    #[test]
+    fn directx_recommendation_prefers_enhanced_only_after_evidence() {
+        let dx11 = PubgDirectXBenchmarkRun::new(
+            PubgDirectXMode::Dx11,
+            176.0,
+            127.0,
+            92.0,
+            10.2,
+            4,
+        );
+        let dx11_enhanced = PubgDirectXBenchmarkRun::new(
+            PubgDirectXMode::Dx11Enhanced,
+            181.0,
+            139.0,
+            99.0,
+            9.5,
+            2,
+        );
+
+        let recommendation =
+            recommend_pubg_directx_mode(PubgDirectXMode::Dx11, &dx11, &dx11_enhanced);
+
+        assert_eq!(
+            recommendation.action,
+            PubgDirectXRecommendationAction::RecommendDx11Enhanced
+        );
+        assert_eq!(recommendation.recommended_mode, PubgDirectXMode::Dx11Enhanced);
+        assert!(recommendation
+            .rationale
+            .contains("improved 1% lows"));
+        assert!(recommendation.rollback.contains("DX11"));
+    }
+
+    #[test]
+    fn directx_recommendation_keeps_current_when_runs_are_inside_variance() {
+        let dx11 = PubgDirectXBenchmarkRun::new(
+            PubgDirectXMode::Dx11,
+            176.0,
+            127.0,
+            92.0,
+            10.2,
+            4,
+        );
+        let dx11_enhanced = PubgDirectXBenchmarkRun::new(
+            PubgDirectXMode::Dx11Enhanced,
+            177.0,
+            129.0,
+            93.0,
+            10.1,
+            4,
+        );
+
+        let recommendation =
+            recommend_pubg_directx_mode(PubgDirectXMode::Dx11, &dx11, &dx11_enhanced);
+
+        assert_eq!(recommendation.action, PubgDirectXRecommendationAction::KeepCurrent);
+        assert_eq!(recommendation.recommended_mode, PubgDirectXMode::Dx11);
+        assert!(recommendation
+            .rationale
+            .contains("keeps the current mode"));
+    }
+
+    #[test]
+    fn directx_recommendation_falls_back_to_dx11_on_enhanced_instability() {
+        let dx11 = PubgDirectXBenchmarkRun::new(
+            PubgDirectXMode::Dx11,
+            176.0,
+            127.0,
+            92.0,
+            10.2,
+            4,
+        );
+        let dx11_enhanced = PubgDirectXBenchmarkRun::new(
+            PubgDirectXMode::Dx11Enhanced,
+            181.0,
+            139.0,
+            99.0,
+            9.5,
+            2,
+        )
+        .with_stability_note("hitch cluster detected");
+
+        let recommendation =
+            recommend_pubg_directx_mode(PubgDirectXMode::Dx11Enhanced, &dx11, &dx11_enhanced);
+
+        assert_eq!(
+            recommendation.action,
+            PubgDirectXRecommendationAction::RecommendDx11
+        );
+        assert_eq!(recommendation.recommended_mode, PubgDirectXMode::Dx11);
+        assert!(recommendation.rationale.contains("stability warnings"));
+        assert!(recommendation.rollback.contains("DX11 Enhanced"));
     }
 
     #[test]
