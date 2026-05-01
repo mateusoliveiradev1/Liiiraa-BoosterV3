@@ -1,8 +1,10 @@
 //! PUBG discovery, settings inspection, and safe recommendation planning.
 
+use local_store::{LocalStore, OptimizerSnapshot};
+use serde::Serialize;
 use std::{
     collections::BTreeSet,
-    env, fs,
+    env, error, fmt, fs, io,
     path::{Path, PathBuf},
 };
 
@@ -24,6 +26,19 @@ pub const PUBG_CONFIG_DIR_NAMES: &[&str] = &["WindowsClient", "WindowsNoEditor"]
 /// Supported config files detected by T070 without parsing their contents.
 pub const PUBG_CONFIG_FILE_NAMES: &[&str] =
     &["GameUserSettings.ini", "Engine.ini", "Scalability.ini", "Input.ini"];
+
+/// Maximum bytes read from one PUBG config file during safe snapshots.
+pub const PUBG_CONFIG_MAX_BYTES: u64 = 512 * 1024;
+
+/// Synthetic section name used for key/value lines before the first INI section.
+pub const PUBG_CONFIG_GLOBAL_SECTION: &str = "global";
+
+/// Snapshot type used when storing PUBG config captures locally.
+pub const PUBG_CONFIG_SNAPSHOT_TYPE: &str = local_store::PUBG_CONFIG_SNAPSHOT_TYPE;
+
+/// Payload schema version used for stored PUBG config captures.
+pub const PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION: &str =
+    local_store::PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION;
 
 /// Launcher family that provided installation metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -345,6 +360,273 @@ pub fn is_pubg_or_battleye_process_name(process_name: &str) -> bool {
         .any(|candidate| candidate.eq_ignore_ascii_case(&process_name))
 }
 
+/// Read-only snapshot of PUBG config files captured before generating suggestions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgConfigSnapshot {
+    /// Parsed config files included in this snapshot.
+    pub files: Vec<PubgConfigFileSnapshot>,
+    /// Non-fatal read or parse warnings encountered while building the snapshot.
+    pub warnings: Vec<PubgConfigWarning>,
+}
+
+impl PubgConfigSnapshot {
+    /// Returns true when no readable config files were captured.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
+
+    /// Looks up one parsed config value by file, section, and key.
+    #[must_use]
+    pub fn setting(
+        &self,
+        file_name: &str,
+        section_name: &str,
+        key: &str,
+    ) -> Option<&PubgConfigEntry> {
+        self.files
+            .iter()
+            .find(|file| file.file_name.eq_ignore_ascii_case(file_name))
+            .and_then(|file| file.setting(section_name, key))
+    }
+}
+
+/// One PUBG config file captured in a read-only snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgConfigFileSnapshot {
+    /// Source file path.
+    pub path: PathBuf,
+    /// File name, such as `GameUserSettings.ini`.
+    pub file_name: String,
+    /// Number of bytes read from disk before UTF-8 normalization.
+    pub byte_len: usize,
+    /// Raw text captured before suggestions are generated.
+    pub raw_contents: String,
+    /// Parsed INI sections in source order.
+    pub sections: Vec<PubgConfigSection>,
+    /// Non-fatal warnings for this file.
+    pub warnings: Vec<PubgConfigWarning>,
+}
+
+impl PubgConfigFileSnapshot {
+    /// Looks up one parsed value by section and key.
+    #[must_use]
+    pub fn setting(&self, section_name: &str, key: &str) -> Option<&PubgConfigEntry> {
+        self.sections
+            .iter()
+            .find(|section| section.name.eq_ignore_ascii_case(section_name))
+            .and_then(|section| {
+                section
+                    .entries
+                    .iter()
+                    .find(|entry| entry.key.eq_ignore_ascii_case(key))
+            })
+    }
+}
+
+/// Parsed PUBG INI section.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgConfigSection {
+    /// Section name without brackets.
+    pub name: String,
+    /// Key/value entries parsed inside this section.
+    pub entries: Vec<PubgConfigEntry>,
+}
+
+/// Parsed PUBG INI key/value entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgConfigEntry {
+    /// Source line number, starting at one.
+    pub line: usize,
+    /// Setting key.
+    pub key: String,
+    /// Setting value, trimmed but otherwise preserved.
+    pub value: String,
+}
+
+/// Non-fatal issue encountered while reading or parsing config files.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgConfigWarning {
+    /// File path related to the warning.
+    pub path: Option<PathBuf>,
+    /// Source line number when the warning came from parser input.
+    pub line: Option<usize>,
+    /// Stable warning classification.
+    pub kind: PubgConfigWarningKind,
+    /// Human-readable diagnostic detail.
+    pub message: String,
+}
+
+/// Stable warning kind for read and parser diagnostics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PubgConfigWarningKind {
+    /// Path was not one of the supported PUBG config file names.
+    UnsupportedFile,
+    /// Path is a symlink and was skipped to avoid following unexpected targets.
+    Symlink,
+    /// Path was not a regular file.
+    NotFile,
+    /// File exceeded the safe read limit.
+    TooLarge,
+    /// File could not be read.
+    Io,
+    /// File was not valid UTF-8 and was decoded lossily for inspection.
+    InvalidUtf8,
+    /// Section header was malformed.
+    MalformedSection,
+    /// Key/value line was malformed.
+    MalformedEntry,
+}
+
+/// Reason a PUBG config snapshot persistence operation failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PubgConfigSnapshotErrorReason {
+    /// JSON serialization failed.
+    Serialization,
+    /// Local SQLite storage rejected the snapshot.
+    LocalStore,
+}
+
+impl PubgConfigSnapshotErrorReason {
+    /// Returns a stable reason string.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Serialization => "serialization",
+            Self::LocalStore => "local_store",
+        }
+    }
+}
+
+/// Structured error for converting or persisting PUBG config snapshots.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PubgConfigSnapshotError {
+    reason: PubgConfigSnapshotErrorReason,
+    detail: String,
+}
+
+impl PubgConfigSnapshotError {
+    fn serialization(detail: impl Into<String>) -> Self {
+        Self {
+            reason: PubgConfigSnapshotErrorReason::Serialization,
+            detail: detail.into(),
+        }
+    }
+
+    fn local_store(detail: impl Into<String>) -> Self {
+        Self {
+            reason: PubgConfigSnapshotErrorReason::LocalStore,
+            detail: detail.into(),
+        }
+    }
+
+    /// Returns the failure reason.
+    #[must_use]
+    pub const fn reason(&self) -> PubgConfigSnapshotErrorReason {
+        self.reason
+    }
+
+    /// Returns diagnostic detail for logs or tests.
+    #[must_use]
+    pub fn detail(&self) -> &str {
+        &self.detail
+    }
+}
+
+impl fmt::Display for PubgConfigSnapshotError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{}: {}", self.reason.as_str(), self.detail)
+    }
+}
+
+impl error::Error for PubgConfigSnapshotError {}
+
+impl From<serde_json::Error> for PubgConfigSnapshotError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::serialization(error.to_string())
+    }
+}
+
+impl From<local_store::LocalStoreError> for PubgConfigSnapshotError {
+    fn from(error: local_store::LocalStoreError) -> Self {
+        Self::local_store(error.to_string())
+    }
+}
+
+/// Reads and parses discovered PUBG config files into a read-only snapshot.
+///
+/// Unreadable, oversized, unsupported, or malformed files do not panic or mutate disk; they are
+/// represented as warnings so suggestion code can remain conservative.
+#[must_use]
+pub fn read_pubg_config_snapshot(discovery: &PubgConfigDiscovery) -> PubgConfigSnapshot {
+    read_pubg_config_snapshot_from_paths(&discovery.files)
+}
+
+/// Reads and parses caller-provided PUBG config paths into a read-only snapshot.
+#[must_use]
+pub fn read_pubg_config_snapshot_from_paths(paths: &[PathBuf]) -> PubgConfigSnapshot {
+    let mut files = Vec::new();
+    let mut warnings = Vec::new();
+
+    for path in paths {
+        let (file, mut file_warnings) = read_pubg_config_file_snapshot(path);
+        warnings.append(&mut file_warnings);
+
+        if let Some(file) = file {
+            files.push(file);
+        }
+    }
+
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    warnings.sort_by_key(warning_sort_key);
+    warnings.dedup();
+
+    PubgConfigSnapshot { files, warnings }
+}
+
+/// Parses already-read PUBG config text into the same structure used by file snapshots.
+#[must_use]
+pub fn parse_pubg_config_contents(
+    path: impl Into<PathBuf>,
+    contents: &str,
+) -> PubgConfigFileSnapshot {
+    let path = path.into();
+    parse_pubg_config_file(&path, contents, contents.len(), Vec::new())
+}
+
+/// Builds a local-store optimizer snapshot from a PUBG config snapshot.
+pub fn pubg_config_optimizer_snapshot(
+    snapshot: &PubgConfigSnapshot,
+    id: impl Into<String>,
+    created_at_utc: impl Into<String>,
+) -> Result<OptimizerSnapshot, PubgConfigSnapshotError> {
+    Ok(OptimizerSnapshot {
+        id: id.into(),
+        snapshot_type: PUBG_CONFIG_SNAPSHOT_TYPE.to_owned(),
+        created_at_utc: created_at_utc.into(),
+        schema_version: PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION.to_owned(),
+        payload_json: serde_json::to_string(snapshot)?,
+    })
+}
+
+/// Persists a PUBG config snapshot before recommendation code uses the parsed settings.
+pub fn persist_pubg_config_snapshot(
+    store: &LocalStore,
+    snapshot: &PubgConfigSnapshot,
+    id: impl Into<String>,
+    created_at_utc: impl Into<String>,
+) -> Result<OptimizerSnapshot, PubgConfigSnapshotError> {
+    let record = pubg_config_optimizer_snapshot(snapshot, id, created_at_utc)?;
+    store.insert_snapshot(&record)?;
+    Ok(record)
+}
+
 fn normalized_process_names<I, S>(process_names: I) -> Vec<String>
 where
     I: IntoIterator<Item = S>,
@@ -368,6 +650,260 @@ fn canonical_process_name(process_name: &str) -> String {
         .unwrap_or(trimmed)
         .trim()
         .to_owned()
+}
+
+fn read_pubg_config_file_snapshot(
+    path: &Path,
+) -> (Option<PubgConfigFileSnapshot>, Vec<PubgConfigWarning>) {
+    let mut warnings = Vec::new();
+
+    if !is_supported_pubg_config_file(path) {
+        warnings.push(config_warning(
+            path,
+            None,
+            PubgConfigWarningKind::UnsupportedFile,
+            "unsupported PUBG config file name",
+        ));
+        return (None, warnings);
+    }
+
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        warnings.push(config_warning(
+            path,
+            None,
+            PubgConfigWarningKind::Io,
+            "config file metadata could not be read",
+        ));
+        return (None, warnings);
+    };
+
+    if metadata.file_type().is_symlink() {
+        warnings.push(config_warning(
+            path,
+            None,
+            PubgConfigWarningKind::Symlink,
+            "symlink config path was skipped",
+        ));
+        return (None, warnings);
+    }
+
+    if !metadata.is_file() {
+        warnings.push(config_warning(
+            path,
+            None,
+            PubgConfigWarningKind::NotFile,
+            "config path is not a regular file",
+        ));
+        return (None, warnings);
+    }
+
+    if metadata.len() > PUBG_CONFIG_MAX_BYTES {
+        warnings.push(config_warning(
+            path,
+            None,
+            PubgConfigWarningKind::TooLarge,
+            format!("config file is larger than {PUBG_CONFIG_MAX_BYTES} bytes"),
+        ));
+        return (None, warnings);
+    }
+
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            warnings.push(config_warning(
+                path,
+                None,
+                PubgConfigWarningKind::Io,
+                format_read_error(error),
+            ));
+            return (None, warnings);
+        }
+    };
+    let byte_len = bytes.len();
+
+    let contents = match String::from_utf8(bytes) {
+        Ok(contents) => contents,
+        Err(error) => {
+            warnings.push(config_warning(
+                path,
+                None,
+                PubgConfigWarningKind::InvalidUtf8,
+                "config file was decoded lossily because it is not valid UTF-8",
+            ));
+            String::from_utf8_lossy(error.as_bytes()).into_owned()
+        }
+    };
+
+    let mut file = parse_pubg_config_file(path, &contents, byte_len, warnings);
+    file.warnings.sort_by_key(warning_sort_key);
+    file.warnings.dedup();
+    let file_warnings = file.warnings.clone();
+
+    (Some(file), file_warnings)
+}
+
+fn parse_pubg_config_file(
+    path: &Path,
+    contents: &str,
+    byte_len: usize,
+    mut warnings: Vec<PubgConfigWarning>,
+) -> PubgConfigFileSnapshot {
+    let mut sections = Vec::<PubgConfigSection>::new();
+    let mut current_section = PubgConfigSection {
+        name: PUBG_CONFIG_GLOBAL_SECTION.to_owned(),
+        entries: Vec::new(),
+    };
+
+    for (line_index, raw_line) in contents.lines().enumerate() {
+        let line_number = line_index + 1;
+        let line = raw_line.trim();
+
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            continue;
+        }
+
+        if line.starts_with('[') {
+            if let Some(section_name) = parse_section_header(line) {
+                push_section_if_needed(&mut sections, &mut current_section);
+                current_section = PubgConfigSection {
+                    name: section_name.to_owned(),
+                    entries: Vec::new(),
+                };
+            } else {
+                warnings.push(config_warning(
+                    path,
+                    Some(line_number),
+                    PubgConfigWarningKind::MalformedSection,
+                    "section header must end with ']' and include a name",
+                ));
+            }
+
+            continue;
+        }
+
+        if let Some((key, value)) = parse_key_value(line) {
+            current_section.entries.push(PubgConfigEntry {
+                line: line_number,
+                key: key.to_owned(),
+                value: value.to_owned(),
+            });
+        } else {
+            warnings.push(config_warning(
+                path,
+                Some(line_number),
+                PubgConfigWarningKind::MalformedEntry,
+                "config line was not a key=value entry",
+            ));
+        }
+    }
+
+    push_section_if_needed(&mut sections, &mut current_section);
+
+    PubgConfigFileSnapshot {
+        path: path.to_path_buf(),
+        file_name: config_file_name(path),
+        byte_len,
+        raw_contents: contents.to_owned(),
+        sections,
+        warnings,
+    }
+}
+
+fn push_section_if_needed(
+    sections: &mut Vec<PubgConfigSection>,
+    section: &mut PubgConfigSection,
+) {
+    if !section.entries.is_empty() {
+        sections.push(section.clone());
+        section.entries.clear();
+    }
+}
+
+fn parse_section_header(line: &str) -> Option<&str> {
+    let section_name = line.strip_prefix('[')?.strip_suffix(']')?.trim();
+
+    if section_name.is_empty() {
+        None
+    } else {
+        Some(section_name)
+    }
+}
+
+fn parse_key_value(line: &str) -> Option<(&str, &str)> {
+    let (key, value) = line.split_once('=')?;
+    let key = key.trim();
+
+    if key.is_empty() {
+        None
+    } else {
+        Some((key, value.trim()))
+    }
+}
+
+fn is_supported_pubg_config_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|file_name| file_name.to_str())
+        .map_or(false, |file_name| {
+            PUBG_CONFIG_FILE_NAMES
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(file_name))
+        })
+}
+
+fn config_file_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|file_name| file_name.to_str())
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn config_warning(
+    path: &Path,
+    line: Option<usize>,
+    kind: PubgConfigWarningKind,
+    message: impl Into<String>,
+) -> PubgConfigWarning {
+    PubgConfigWarning {
+        path: Some(path.to_path_buf()),
+        line,
+        kind,
+        message: message.into(),
+    }
+}
+
+fn warning_sort_key(warning: &PubgConfigWarning) -> (String, Option<usize>, &'static str, String) {
+    (
+        warning
+            .path
+            .as_ref()
+            .map_or_else(String::new, |path| path.to_string_lossy().into_owned()),
+        warning.line,
+        warning.kind.as_str(),
+        warning.message.clone(),
+    )
+}
+
+impl PubgConfigWarningKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::UnsupportedFile => "unsupported_file",
+            Self::Symlink => "symlink",
+            Self::NotFile => "not_file",
+            Self::TooLarge => "too_large",
+            Self::Io => "io",
+            Self::InvalidUtf8 => "invalid_utf8",
+            Self::MalformedSection => "malformed_section",
+            Self::MalformedEntry => "malformed_entry",
+        }
+    }
+}
+
+fn format_read_error(error: io::Error) -> String {
+    match error.kind() {
+        io::ErrorKind::NotFound => "config file was not found".to_owned(),
+        io::ErrorKind::PermissionDenied => "permission denied while reading config file".to_owned(),
+        _ => format!("config file could not be read: {error}"),
+    }
 }
 
 fn discover_steam_installations(steam_roots: &[PathBuf]) -> Vec<PubgInstallation> {
@@ -765,6 +1301,111 @@ mod tests {
         );
         assert!(!state.allows_profile_mutation());
         assert!(PubgRuntimeState::no_processes().allows_profile_mutation());
+    }
+
+    #[test]
+    fn parses_pubg_config_values_and_records_malformed_lines() {
+        let file = parse_pubg_config_contents(
+            "GameUserSettings.ini",
+            r#"; user comment
+[/Script/TslGame.TslGameUserSettings]
+ResolutionSizeX=1920
+sg.ViewDistanceQuality = 2
+malformed line
+[ScalabilityGroups
+sg.AntiAliasingQuality=1
+"#,
+        );
+
+        assert_eq!(file.file_name, "GameUserSettings.ini");
+        assert_eq!(
+            file.setting("/Script/TslGame.TslGameUserSettings", "ResolutionSizeX")
+                .map(|entry| entry.value.as_str()),
+            Some("1920")
+        );
+        assert_eq!(
+            file.setting("/Script/TslGame.TslGameUserSettings", "sg.ViewDistanceQuality")
+                .map(|entry| entry.value.as_str()),
+            Some("2")
+        );
+        assert_eq!(
+            file.warnings
+                .iter()
+                .map(|warning| warning.kind)
+                .collect::<Vec<_>>(),
+            vec![
+                PubgConfigWarningKind::MalformedEntry,
+                PubgConfigWarningKind::MalformedSection,
+            ]
+        );
+    }
+
+    #[test]
+    fn reads_config_snapshot_without_following_unsupported_paths() {
+        let fixture = FixtureDir::new("config-snapshot");
+        let config_file = fixture.path().join("GameUserSettings.ini");
+        let unrelated_file = fixture.path().join("notes.txt");
+
+        write_file(
+            &config_file,
+            "[/Script/TslGame.TslGameUserSettings]\nFrameRateLimit=237.5\n",
+        );
+        write_file(&unrelated_file, "not a PUBG config");
+
+        let snapshot =
+            read_pubg_config_snapshot_from_paths(&[unrelated_file.clone(), config_file.clone()]);
+
+        assert_eq!(snapshot.files.len(), 1);
+        assert_eq!(snapshot.files[0].path, config_file);
+        assert_eq!(
+            snapshot
+                .setting(
+                    "GameUserSettings.ini",
+                    "/Script/TslGame.TslGameUserSettings",
+                    "FrameRateLimit"
+                )
+                .map(|entry| entry.value.as_str()),
+            Some("237.5")
+        );
+        assert_eq!(snapshot.warnings.len(), 1);
+        assert_eq!(
+            snapshot.warnings[0].path.as_deref(),
+            Some(unrelated_file.as_path())
+        );
+        assert_eq!(
+            snapshot.warnings[0].kind,
+            PubgConfigWarningKind::UnsupportedFile
+        );
+    }
+
+    #[test]
+    fn persists_pubg_config_snapshot_for_local_reuse() {
+        let store = LocalStore::open_in_memory().expect("store should open");
+        let file = parse_pubg_config_contents(
+            "GameUserSettings.ini",
+            "[/Script/TslGame.TslGameUserSettings]\nResolutionSizeY=1080\n",
+        );
+        let snapshot = PubgConfigSnapshot {
+            files: vec![file],
+            warnings: Vec::new(),
+        };
+
+        let record = persist_pubg_config_snapshot(
+            &store,
+            &snapshot,
+            "snapshot:pubg-config:001",
+            "2026-05-01T12:00:00Z",
+        )
+        .expect("snapshot should persist");
+
+        assert_eq!(record.snapshot_type, PUBG_CONFIG_SNAPSHOT_TYPE);
+        assert_eq!(record.schema_version, PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION);
+        assert!(record.payload_json.contains("ResolutionSizeY"));
+
+        let stored = store
+            .pubg_config_snapshots()
+            .expect("PUBG snapshots should be listed");
+        assert_eq!(stored, vec![record]);
     }
 
     #[test]

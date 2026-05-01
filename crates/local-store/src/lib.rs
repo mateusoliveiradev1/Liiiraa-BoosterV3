@@ -8,6 +8,12 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 /// Current local SQLite schema version.
 pub const SCHEMA_VERSION: i64 = 1;
 
+/// Snapshot type used for read-only PUBG config captures before recommendations.
+pub const PUBG_CONFIG_SNAPSHOT_TYPE: &str = "pubg.config";
+
+/// Payload schema version for PUBG config snapshots.
+pub const PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION: &str = "pubg-config-v1";
+
 /// Initial schema for local optimizer persistence.
 pub const MIGRATION_001: &str = r#"
 BEGIN;
@@ -190,6 +196,29 @@ impl LocalStore {
             )
             .optional()
             .map_err(Into::into)
+    }
+
+    /// Lists optimizer snapshots matching one snapshot type.
+    pub fn snapshots_by_type(
+        &self,
+        snapshot_type: &str,
+    ) -> LocalStoreResult<Vec<OptimizerSnapshot>> {
+        validate_identifier("snapshot_type", snapshot_type)?;
+
+        let mut statement = self.connection.prepare(
+            "SELECT id, snapshot_type, created_at_utc, schema_version, payload_json
+             FROM optimizer_snapshots
+             WHERE snapshot_type = ?1
+             ORDER BY created_at_utc, id",
+        )?;
+        let rows = statement.query_map([snapshot_type], map_snapshot)?;
+
+        collect_rows(rows)
+    }
+
+    /// Lists stored PUBG config snapshots captured before recommendations.
+    pub fn pubg_config_snapshots(&self) -> LocalStoreResult<Vec<OptimizerSnapshot>> {
+        self.snapshots_by_type(PUBG_CONFIG_SNAPSHOT_TYPE)
     }
 
     /// Stores an audit event for local accountability and rollback trails.
@@ -834,6 +863,16 @@ mod tests {
         }
     }
 
+    fn pubg_config_snapshot(id: &str, created_at_utc: &str) -> OptimizerSnapshot {
+        OptimizerSnapshot {
+            id: id.to_owned(),
+            snapshot_type: PUBG_CONFIG_SNAPSHOT_TYPE.to_owned(),
+            created_at_utc: created_at_utc.to_owned(),
+            schema_version: PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION.to_owned(),
+            payload_json: "{\"files\":[]}".to_owned(),
+        }
+    }
+
     fn audit_event() -> AuditEvent {
         AuditEvent {
             id: "audit:001".to_owned(),
@@ -965,6 +1004,29 @@ mod tests {
             vec![BenchmarkPhase::Before, BenchmarkPhase::After]
         );
         assert!(captures.iter().all(|capture| capture.latency_proxy));
+    }
+
+    #[test]
+    fn lists_pubg_config_snapshots_in_capture_order() {
+        let store = LocalStore::open_in_memory().expect("store should open");
+        let later = pubg_config_snapshot("snapshot:pubg-config:002", "2026-04-30T12:05:00Z");
+        let earlier = pubg_config_snapshot("snapshot:pubg-config:001", "2026-04-30T12:04:00Z");
+
+        store
+            .insert_snapshot(&snapshot())
+            .expect("unrelated snapshot should be stored");
+        store
+            .insert_snapshot(&later)
+            .expect("later PUBG snapshot should be stored");
+        store
+            .insert_snapshot(&earlier)
+            .expect("earlier PUBG snapshot should be stored");
+
+        let snapshots = store
+            .pubg_config_snapshots()
+            .expect("PUBG snapshots should list");
+
+        assert_eq!(snapshots, vec![earlier, later]);
     }
 
     #[test]
