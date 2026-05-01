@@ -266,10 +266,28 @@ $services = @(Invoke-ScanSection "services" {
 
 $scheduledTasks = @(Invoke-ScanSection "scheduled_tasks" {
     @(Get-ScheduledTask | ForEach-Object {
+        $taskInfo = $null
+        try {
+            $taskInfo = $_ | Get-ScheduledTaskInfo -ErrorAction Stop
+        } catch {
+            $taskInfo = $null
+        }
+        $nextRunTime = if ($null -eq $taskInfo -or $taskInfo.NextRunTime -eq [DateTime]::MinValue) {
+            $null
+        } else {
+            [string]$taskInfo.NextRunTime.ToString("o")
+        }
+        $lastRunTime = if ($null -eq $taskInfo -or $taskInfo.LastRunTime -eq [DateTime]::MinValue) {
+            $null
+        } else {
+            [string]$taskInfo.LastRunTime.ToString("o")
+        }
         [ordered]@{
             taskName = [string]$_.TaskName
             taskPath = [string]$_.TaskPath
             state = if ($null -eq $_.State) { $null } else { [string]$_.State }
+            nextRunTime = $nextRunTime
+            lastRunTime = $lastRunTime
         }
     })
 } @())
@@ -362,17 +380,29 @@ $hvci = Invoke-ScanSection "security.hvci" {
 
 $defender = Invoke-ScanSection "security.defender" {
     $status = Get-MpComputerStatus
+    $prefs = $null
+    try {
+        $prefs = Get-MpPreference -ErrorAction Stop
+    } catch {
+        $prefs = $null
+    }
     [ordered]@{
         antivirusEnabled = [bool]$status.AntivirusEnabled
         realTimeProtectionEnabled = [bool]$status.RealTimeProtectionEnabled
         tamperProtected = if ($null -eq $status.IsTamperProtected) { $null } else { [bool]$status.IsTamperProtected }
         antispywareEnabled = [bool]$status.AntispywareEnabled
+        exclusionPaths = if ($null -eq $prefs) { @() } else { @($prefs.ExclusionPath | ForEach-Object { [string]$_ }) }
+        scanScheduleDay = if ($null -eq $prefs) { $null } else { Convert-NullableUInt32 $prefs.ScanScheduleDay }
+        scanScheduleTime = if ($null -eq $prefs -or $null -eq $prefs.ScanScheduleTime) { $null } else { [string]$prefs.ScanScheduleTime }
     }
 } ([ordered]@{
     antivirusEnabled = $null
     realTimeProtectionEnabled = $null
     tamperProtected = $null
     antispywareEnabled = $null
+    exclusionPaths = @()
+    scanScheduleDay = $null
+    scanScheduleTime = $null
 })
 
 $pendingFileRename = $false
@@ -775,6 +805,12 @@ pub struct ScheduledTaskScanItem {
     pub task_path: String,
     /// Task state.
     pub state: Option<String>,
+    /// Next run time in read-only scan output, when Windows exposes it.
+    #[serde(default)]
+    pub next_run_time: Option<String>,
+    /// Last run time in read-only scan output, when Windows exposes it.
+    #[serde(default)]
+    pub last_run_time: Option<String>,
 }
 
 /// Startup app inventory item.
@@ -875,6 +911,15 @@ pub struct DefenderScan {
     pub tamper_protected: Option<bool>,
     /// Whether antispyware protection is enabled.
     pub antispyware_enabled: Option<bool>,
+    /// Existing Defender exclusion paths, read-only.
+    #[serde(default)]
+    pub exclusion_paths: Vec<String>,
+    /// Defender scheduled scan day preference, when available.
+    #[serde(default)]
+    pub scan_schedule_day: Option<u32>,
+    /// Defender scheduled scan time preference, when available.
+    #[serde(default)]
+    pub scan_schedule_time: Option<String>,
 }
 
 /// Reboot-required registry marker state.

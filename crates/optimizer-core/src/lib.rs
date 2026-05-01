@@ -3,6 +3,7 @@
 pub mod backup;
 pub mod background_work;
 pub mod catalog;
+pub mod defender;
 pub mod gaming_capture;
 pub mod ipc;
 pub mod planning;
