@@ -8,6 +8,7 @@ pub mod defender;
 pub mod gaming_capture;
 pub mod gpu_detection;
 pub mod graphics_settings;
+pub mod intel_graphics;
 pub mod ipc;
 pub mod network;
 pub mod planning;

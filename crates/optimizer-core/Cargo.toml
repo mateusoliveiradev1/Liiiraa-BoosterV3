@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 cpu = { path = "../cpu" }
 gpu = { path = "../gpu" }
+intel-gpu = { path = "../intel-gpu" }
 
 [lints]
 workspace = true
