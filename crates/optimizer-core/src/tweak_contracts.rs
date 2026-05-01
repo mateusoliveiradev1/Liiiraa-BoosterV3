@@ -689,6 +689,11 @@ pub enum BackupPayload {
         /// Previous value.
         value: String,
     },
+    /// Exact previous values for a group of logical targets.
+    ExactValues {
+        /// Backed-up target/value pairs.
+        values: Vec<BackupExactValue>,
+    },
     /// Marker for a value created by the optimizer.
     CreatedValue {
         /// Created target.
@@ -715,6 +720,15 @@ pub enum BackupPayload {
     },
     /// Read-only item with no backup material.
     ReadOnly,
+}
+
+/// One exact backed-up value within a grouped backup payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupExactValue {
+    /// Backed-up target.
+    pub target: String,
+    /// Previous value.
+    pub value: String,
 }
 
 /// Backup record persisted before apply.

@@ -2,12 +2,18 @@
 
 pub mod backup;
 pub mod command;
+pub mod gaming;
 pub mod power;
 pub mod scan;
 
 pub use backup::WindowsRollbackFixture;
 pub use command::{
     FixedWindowsExecutable, StructuredCommandPlan, WindowsArgument, WindowsCommandPlanError,
+};
+pub use gaming::{
+    apply_gaming_capture_plan_to_fixture, verify_gaming_capture_plan_fixture,
+    GamingCaptureRegistryError, GamingCaptureRegistryErrorReason,
+    GamingCaptureRegistrySummary,
 };
 pub use power::{
     active_power_scheme_matches, build_liiiraa_powercfg_plan, parse_active_power_scheme_guid,

@@ -7,7 +7,10 @@ use optimizer_core::{
         BackupAdapter, BackupCaptureRequest, BackupError, RollbackAdapter, RollbackError,
         RollbackRequest,
     },
-    tweak_contracts::{BackupPayload, BackupRecord, RollbackKind, RollbackResult, RollbackStatus},
+    tweak_contracts::{
+        BackupExactValue, BackupPayload, BackupRecord, RollbackKind, RollbackResult,
+        RollbackStatus,
+    },
 };
 
 const MAX_LOGICAL_TARGET_LEN: usize = 160;
@@ -86,16 +89,33 @@ impl BackupAdapter for WindowsRollbackFixture {
 
         let payload = match request.kind {
             RollbackKind::ExactValue => {
-                let value = self.values.get(&request.target).ok_or_else(|| {
-                    BackupError::capture_failed(
-                        request.tweak_id.clone(),
-                        "exact-value backup target is missing from fixture state",
-                    )
-                })?;
+                let values = exact_value_backup_targets(request)
+                    .into_iter()
+                    .map(|target| {
+                        validate_logical_target(&target).map_err(|detail| {
+                            BackupError::capture_failed(request.tweak_id.clone(), detail)
+                        })?;
 
-                BackupPayload::ExactValue {
-                    target: request.target.clone(),
-                    value: value.clone(),
+                        let value = self.values.get(&target).ok_or_else(|| {
+                            BackupError::capture_failed(
+                                request.tweak_id.clone(),
+                                "exact-value backup target is missing from fixture state",
+                            )
+                        })?;
+
+                        Ok(BackupExactValue {
+                            target,
+                            value: value.clone(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, BackupError>>()?;
+
+                match values.as_slice() {
+                    [value] => BackupPayload::ExactValue {
+                        target: value.target.clone(),
+                        value: value.value.clone(),
+                    },
+                    _ => BackupPayload::ExactValues { values },
                 }
             }
             RollbackKind::DeleteCreatedValue => {
@@ -147,6 +167,34 @@ impl RollbackAdapter for WindowsRollbackFixture {
                 self.values.insert(target.clone(), value.clone());
 
                 Ok(restored_result(&request.backup.id, target))
+            }
+            BackupPayload::ExactValues { values } => {
+                if values.is_empty() {
+                    return Err(RollbackError::restore_failed(
+                        request.tweak_id.clone(),
+                        "exact-values backup payload is empty",
+                    ));
+                }
+
+                let mut restored_targets = Vec::with_capacity(values.len());
+
+                for exact in values {
+                    self.ensure_plan_restores_target(request, &exact.target)?;
+                    validate_logical_target(&exact.target).map_err(|detail| {
+                        RollbackError::restore_failed(request.tweak_id.clone(), detail)
+                    })?;
+
+                    self.values
+                        .insert(exact.target.clone(), exact.value.clone());
+                    restored_targets.push(exact.target.clone());
+                }
+
+                Ok(RollbackResult {
+                    backup_id: Some(request.backup.id.clone()),
+                    status: RollbackStatus::Restored,
+                    restored_targets,
+                    messages: Vec::new(),
+                })
             }
             BackupPayload::CreatedValue { target } => {
                 self.ensure_plan_restores_target(request, target)?;
@@ -202,6 +250,18 @@ impl WindowsRollbackFixture {
             ))
         }
     }
+}
+
+fn exact_value_backup_targets(request: &BackupCaptureRequest) -> Vec<String> {
+    let mut targets = vec![request.target.clone()];
+
+    for change in &request.changes {
+        if !targets.contains(&change.target) {
+            targets.push(change.target.clone());
+        }
+    }
+
+    targets
 }
 
 fn restored_result(backup_id: &str, target: &str) -> RollbackResult {
