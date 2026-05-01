@@ -11,6 +11,7 @@ pub mod power_plan;
 pub mod protected_storage;
 pub mod storage;
 pub mod tweak_contracts;
+pub mod windows_update;
 
 /// Static metadata describing this workspace crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

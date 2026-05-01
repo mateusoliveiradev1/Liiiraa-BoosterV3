@@ -8,6 +8,7 @@ pub mod gaming;
 pub mod power;
 pub mod scan;
 pub mod storage;
+pub mod windows_update;
 
 pub use backup::WindowsRollbackFixture;
 pub use background_work::{
@@ -46,6 +47,11 @@ pub use storage::{
     apply_storage_sense_plan_to_fixture, build_consented_storage_sense_plan_from_scan,
     build_storage_readiness_plan_from_scan, verify_storage_sense_plan_fixture,
     StorageSenseRegistryError, StorageSenseRegistryErrorReason, StorageSenseRegistrySummary,
+};
+pub use windows_update::{
+    apply_windows_update_plan_to_fixture, build_windows_update_plan_from_scan,
+    verify_windows_update_plan_fixture, windows_update_plan_blocks_global_disable,
+    WindowsUpdateSettingsError, WindowsUpdateSettingsErrorReason, WindowsUpdateSettingsSummary,
 };
 
 /// Static metadata describing this workspace crate.
