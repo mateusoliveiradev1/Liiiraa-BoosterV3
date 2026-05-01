@@ -5,6 +5,7 @@ pub mod background_work;
 pub mod command;
 pub mod defender;
 pub mod gaming;
+pub mod network;
 pub mod power;
 pub mod scan;
 pub mod storage;
@@ -27,6 +28,12 @@ pub use gaming::{
     GamingCaptureRegistryError, GamingCaptureRegistryErrorReason,
     GamingCaptureRegistrySummary,
 };
+pub use network::{
+    apply_network_adapter_power_plan_to_fixture,
+    build_consented_network_adapter_power_plan_from_scan,
+    build_network_adapter_power_plan_from_scan, verify_network_adapter_power_plan_fixture,
+    NetworkAdapterSettingsError, NetworkAdapterSettingsErrorReason, NetworkAdapterSettingsSummary,
+};
 pub use power::{
     active_power_scheme_matches, build_liiiraa_powercfg_plan, parse_active_power_scheme_guid,
     LiiiraaPowerCfgApplyPlan, LiiiraaPowerCfgRollbackPlan, LiiiraaPowerPlanApplyRequest,
@@ -36,12 +43,13 @@ pub use power::{
 };
 pub use scan::{
     parse_system_scan_report, scan_system, BackgroundAppScanItem, CpuScanItem, DefenderScan,
-    DirectStorageScan, GpuScanItem, MemoryModuleScanItem, MemoryScan, NetworkAdapterScanItem,
-    OsScan, PhysicalDiskScanItem, PowerPlanScan, RebootRequiredScan, ScheduledTaskScanItem,
-    SecurityScan, ServiceScanItem, StartupAppScanItem, StorageCleanupCandidateScanItem,
-    StorageCleanupScan, StorageScan, StorageSenseScan, StorageTrimScan, StorageVolumeScanItem,
-    SystemScanError, SystemScanErrorReason, SystemScanMode, SystemScanReport,
-    WindowsSystemScanner,
+    DirectStorageScan, GpuScanItem, MemoryModuleScanItem, MemoryScan,
+    NetworkAdapterAdvancedPropertyScanItem, NetworkAdapterPowerManagementScan,
+    NetworkAdapterScanItem, OsScan, PhysicalDiskScanItem, PowerPlanScan, RebootRequiredScan,
+    ScheduledTaskScanItem, SecurityScan, ServiceScanItem, StartupAppScanItem,
+    StorageCleanupCandidateScanItem, StorageCleanupScan, StorageScan, StorageSenseScan,
+    StorageTrimScan, StorageVolumeScanItem, SystemScanError, SystemScanErrorReason,
+    SystemScanMode, SystemScanReport, WindowsSystemScanner,
 };
 pub use storage::{
     apply_storage_sense_plan_to_fixture, build_consented_storage_sense_plan_from_scan,

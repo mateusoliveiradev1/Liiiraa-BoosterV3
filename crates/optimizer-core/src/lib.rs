@@ -6,6 +6,7 @@ pub mod catalog;
 pub mod defender;
 pub mod gaming_capture;
 pub mod ipc;
+pub mod network;
 pub mod planning;
 pub mod power_plan;
 pub mod protected_storage;

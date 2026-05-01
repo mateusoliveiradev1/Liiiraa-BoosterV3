@@ -49,6 +49,21 @@ function Convert-NullableBool($value) {
     }
 }
 
+function Convert-NullableEnabledBool($value) {
+    if ($null -eq $value) {
+        $null
+    } else {
+        $text = ([string]$value).Trim()
+        if ($text -match '^(Enabled|Enable|True|1)$') {
+            $true
+        } elseif ($text -match '^(Disabled|Disable|False|0)$') {
+            $false
+        } else {
+            $null
+        }
+    }
+}
+
 function Get-PropertyValue($props, [string]$name) {
     if ($null -eq $props) {
         $null
@@ -242,13 +257,51 @@ $directStorage = Invoke-ScanSection "storage.direct_storage" {
 
 $networkAdapters = @(Invoke-ScanSection "network.adapters" {
     @(Get-CimInstance -ClassName Win32_NetworkAdapter -Filter "PhysicalAdapter=True" | ForEach-Object {
+        $adapterAlias = if ($null -eq $_.NetConnectionID) { $null } else { [string]$_.NetConnectionID }
+        $powerManagement = [ordered]@{
+            allowComputerToTurnOffDevice = $null
+            source = "Get-NetAdapterPowerManagement unavailable"
+        }
+        $advancedProperties = @()
+
+        if ($null -ne $adapterAlias -and $adapterAlias.Length -gt 0) {
+            try {
+                $pm = Get-NetAdapterPowerManagement -Name $adapterAlias -ErrorAction Stop
+                $powerManagement = [ordered]@{
+                    allowComputerToTurnOffDevice = Convert-NullableEnabledBool (Get-PropertyValue $pm "AllowComputerToTurnOffDevice")
+                    source = "Get-NetAdapterPowerManagement"
+                }
+            } catch {
+                $powerManagement = [ordered]@{
+                    allowComputerToTurnOffDevice = $null
+                    source = "Get-NetAdapterPowerManagement unavailable"
+                }
+            }
+
+            try {
+                $advancedProperties = @(Get-NetAdapterAdvancedProperty -Name $adapterAlias -ErrorAction Stop | ForEach-Object {
+                    $registryValue = Get-PropertyValue $_ "RegistryValue"
+                    [ordered]@{
+                        displayName = if ($null -eq $_.DisplayName) { [string]$_.Name } else { [string]$_.DisplayName }
+                        displayValue = if ($null -eq $_.DisplayValue) { $null } else { [string]$_.DisplayValue }
+                        registryKeyword = if ($null -eq $_.RegistryKeyword) { $null } else { [string]$_.RegistryKeyword }
+                        registryValue = if ($null -eq $registryValue) { $null } elseif ($registryValue -is [array]) { [string]::Join(",", @($registryValue)) } else { [string]$registryValue }
+                    }
+                })
+            } catch {
+                $advancedProperties = @()
+            }
+        }
+
         [ordered]@{
             name = [string]$_.Name
             adapterType = if ($null -eq $_.AdapterType) { $null } else { [string]$_.AdapterType }
             macAddress = if ($null -eq $_.MACAddress) { $null } else { [string]$_.MACAddress }
-            netConnectionId = if ($null -eq $_.NetConnectionID) { $null } else { [string]$_.NetConnectionID }
+            netConnectionId = $adapterAlias
             netConnectionStatus = Convert-NullableUInt32 $_.NetConnectionStatus
             speedBitsPerSecond = Convert-NullableUInt64 $_.Speed
+            powerManagement = $powerManagement
+            advancedProperties = @($advancedProperties)
         }
     })
 } @())
@@ -779,6 +832,45 @@ pub struct NetworkAdapterScanItem {
     pub net_connection_status: Option<u32>,
     /// Link speed in bits per second.
     pub speed_bits_per_second: Option<u64>,
+    /// Adapter power-management values exposed by Windows.
+    #[serde(default)]
+    pub power_management: NetworkAdapterPowerManagementScan,
+    /// Advanced adapter properties exposed by the driver.
+    #[serde(default)]
+    pub advanced_properties: Vec<NetworkAdapterAdvancedPropertyScanItem>,
+}
+
+/// Network adapter power-management state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NetworkAdapterPowerManagementScan {
+    /// Whether Windows may power down the adapter to save energy.
+    pub allow_computer_to_turn_off_device: Option<bool>,
+    /// Read-only source used for this adapter power-management scan.
+    pub source: String,
+}
+
+impl Default for NetworkAdapterPowerManagementScan {
+    fn default() -> Self {
+        Self {
+            allow_computer_to_turn_off_device: None,
+            source: "unavailable".to_owned(),
+        }
+    }
+}
+
+/// Advanced network adapter property exposed by `Get-NetAdapterAdvancedProperty`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NetworkAdapterAdvancedPropertyScanItem {
+    /// Exact display name exposed by the adapter driver.
+    pub display_name: String,
+    /// Current display value.
+    pub display_value: Option<String>,
+    /// Adapter registry keyword for the exact property.
+    pub registry_keyword: Option<String>,
+    /// Current registry value when exposed by the cmdlet.
+    pub registry_value: Option<String>,
 }
 
 /// Service inventory item.

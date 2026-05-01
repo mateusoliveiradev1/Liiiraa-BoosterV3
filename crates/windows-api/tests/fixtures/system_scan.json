@@ -125,7 +125,31 @@
       "macAddress": "00:11:22:33:44:55",
       "netConnectionId": "Ethernet",
       "netConnectionStatus": 2,
-      "speedBitsPerSecond": 2500000000
+      "speedBitsPerSecond": 2500000000,
+      "powerManagement": {
+        "allowComputerToTurnOffDevice": true,
+        "source": "fixture Get-NetAdapterPowerManagement"
+      },
+      "advancedProperties": [
+        {
+          "displayName": "Energy Efficient Ethernet",
+          "displayValue": "Enabled",
+          "registryKeyword": "EEE",
+          "registryValue": "1"
+        },
+        {
+          "displayName": "Green Ethernet",
+          "displayValue": "Disabled",
+          "registryKeyword": "GreenEthernet",
+          "registryValue": "0"
+        },
+        {
+          "displayName": "Receive Side Scaling",
+          "displayValue": "Enabled",
+          "registryKeyword": "*RSS",
+          "registryValue": "1"
+        }
+      ]
     }
   ],
   "services": [
