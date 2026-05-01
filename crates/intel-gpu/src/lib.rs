@@ -321,6 +321,15 @@ impl IntelGraphicsDetection {
     }
 }
 
+/// Builds the Intel graphics view of the shared GPU platform capability plan.
+#[must_use]
+pub fn plan_intel_platform_capabilities(
+    detection: &IntelGraphicsDetection,
+    request: &GpuPlatformCheckRequest,
+) -> GpuPlatformCapabilityPlan {
+    plan_gpu_platform_capabilities(&detection.vendor, request)
+}
+
 /// Classifies an Intel graphics family from adapter strings.
 #[must_use]
 pub fn classify_intel_graphics_family(
@@ -422,6 +431,41 @@ mod tests {
             GpuCapabilityState::Unknown
         );
         assert_eq!(detection.pubg_known_issue_state, GpuCapabilityState::Unknown);
+    }
+
+    #[test]
+    fn intel_platform_plan_uses_shared_read_only_policy() {
+        let inventory = GpuInventory::new(vec![GpuAdapter::from_scan(
+            "Intel(R) Arc(TM) A770 Graphics",
+            Some("31.0.101.5590"),
+            None,
+            None,
+            Some("PCI\\VEN_8086&DEV_56A0"),
+        )]);
+        let detection = IntelGraphicsDetection::from_inventory(&inventory);
+        let request = gpu::GpuPlatformCheckRequest::new(gpu::GpuPlatformIntent::Balanced)
+            .with_driver_age_days(220)
+            .with_display(gpu::GpuDisplayPipelineState::new(
+                Some(144),
+                Some(144),
+                GpuCapabilityState::Unknown,
+            ))
+            .with_rebar_sam_state(GpuCapabilityState::Unknown)
+            .with_frame_generation_state(GpuCapabilityState::NotApplicable)
+            .with_shader_cache(gpu::GpuShaderCacheState::unknown());
+
+        let plan = plan_intel_platform_capabilities(&detection, &request);
+
+        assert_eq!(plan.vendor, GpuVendor::Intel);
+        assert_eq!(plan.driver.action, gpu::GpuDriverMaintenanceAction::UpdateRecommended);
+        assert_eq!(plan.rebar_sam.label, "Resizable BAR");
+        assert_eq!(
+            plan.frame_generation.policy,
+            gpu::GpuFrameGenerationPolicy::Unsupported
+        );
+        assert!(plan.recommendations.iter().any(|recommendation| {
+            recommendation.check == gpu::GpuPlatformCheck::DriverAge
+        }));
     }
 
     #[test]

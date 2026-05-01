@@ -1,6 +1,10 @@
 //! AMD GPU profile planning and safe Adrenalin guidance.
 
-use gpu::{GpuCapabilityState, GpuInventory, GpuVendor, GpuVendorDetection};
+use gpu::{
+    plan_gpu_platform_capabilities, GpuCapabilityState, GpuInventory,
+    GpuPlatformCapabilityPlan, GpuPlatformCheckRequest, GpuVendor,
+    GpuVendorDetection,
+};
 
 /// Tweak ID for AMD Radeon GPU and driver detection.
 pub const AMD_DETECT_TWEAK_ID: &str = "amd.detect";
@@ -31,6 +35,8 @@ pub const AMD_SAM_ENABLE_GUIDE_TWEAK_ID: &str = "amd.sam.enable-guide";
 pub const AMD_AFMF_TWEAK_ID: &str = "amd.afmf.framegen-policy";
 /// Tweak ID for Radeon Image Sharpening and Radeon Super Resolution planning.
 pub const AMD_RIS_RSR_TWEAK_ID: &str = "amd.ris-rsr.profile";
+/// Tweak ID for AMD clean driver update guidance.
+pub const AMD_DRIVER_UPDATE_CLEAN_TWEAK_ID: &str = "amd.driver.update-clean";
 
 /// User-facing AMD profile name owned by Liiiraa.
 pub const LIIIRAA_AMD_PROFILE_NAME: &str = "Liiiraa Boost - Radeon Profile";
@@ -91,6 +97,15 @@ impl AmdDriverDetection {
     pub fn has_driver_version(&self) -> bool {
         matches!(self.vendor.driver_state(), GpuCapabilityState::Ready)
     }
+}
+
+/// Builds the AMD view of the shared GPU platform capability plan.
+#[must_use]
+pub fn plan_amd_platform_capabilities(
+    detection: &AmdDriverDetection,
+    request: &GpuPlatformCheckRequest,
+) -> GpuPlatformCapabilityPlan {
+    plan_gpu_platform_capabilities(&detection.vendor, request)
 }
 
 /// AMD Radeon features covered by the V1 planner.
@@ -1221,6 +1236,42 @@ mod tests {
             detection.per_game_profile_state,
             GpuCapabilityState::Unknown
         );
+    }
+
+    #[test]
+    fn amd_platform_plan_uses_sam_and_afmf_policy_labels() {
+        let inventory = GpuInventory::new(vec![GpuAdapter::from_scan(
+            "AMD Radeon RX 7800 XT",
+            Some("31.0.24002.92"),
+            None,
+            None,
+            Some("PCI\\VEN_1002&DEV_747E"),
+        )]);
+        let detection = AmdDriverDetection::from_inventory(&inventory);
+        let request = gpu::GpuPlatformCheckRequest::new(gpu::GpuPlatformIntent::VisualQuality)
+            .with_driver_age_days(20)
+            .with_display(gpu::GpuDisplayPipelineState::new(
+                Some(165),
+                Some(165),
+                GpuCapabilityState::Ready,
+            ))
+            .with_rebar_sam_state(GpuCapabilityState::Missing)
+            .with_frame_generation_state(GpuCapabilityState::Ready)
+            .with_shader_cache(gpu::GpuShaderCacheState::enabled(None));
+
+        let plan = plan_amd_platform_capabilities(&detection, &request);
+
+        assert_eq!(plan.vendor, GpuVendor::Amd);
+        assert_eq!(plan.rebar_sam.label, "Smart Access Memory/ReBAR");
+        assert_eq!(plan.rebar_sam.decision, gpu::GpuPlatformDecision::Recommend);
+        assert_eq!(plan.frame_generation.label, "AMD Fluid Motion Frames");
+        assert_eq!(
+            plan.frame_generation.policy,
+            gpu::GpuFrameGenerationPolicy::OptionalWithConsent
+        );
+        assert!(plan.recommendations.iter().any(|recommendation| {
+            recommendation.check == gpu::GpuPlatformCheck::RebarSam
+        }));
     }
 
     #[test]

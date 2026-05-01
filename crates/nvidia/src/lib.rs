@@ -1,6 +1,10 @@
 //! NVIDIA profile backup, planning, apply, and verification.
 
-use gpu::{GpuCapabilityState, GpuInventory, GpuVendor, GpuVendorDetection};
+use gpu::{
+    plan_gpu_platform_capabilities, GpuCapabilityState, GpuInventory,
+    GpuPlatformCapabilityPlan, GpuPlatformCheckRequest, GpuVendor,
+    GpuVendorDetection,
+};
 use pubg::{PubgRuntimeState, PUBG_EXECUTABLE_NAME};
 use std::{collections::BTreeSet, fmt};
 
@@ -12,6 +16,14 @@ pub const NVIDIA_GLOBAL_PROFILE_TWEAK_ID: &str = "nvidia.global.profile";
 
 /// Tweak ID for the PUBG competitive NVIDIA application profile.
 pub const NVIDIA_PUBG_PROFILE_TWEAK_ID: &str = "nvidia.pubg.profile";
+/// Tweak ID for NVIDIA clean driver update guidance.
+pub const NVIDIA_DRIVER_UPDATE_CLEAN_TWEAK_ID: &str = "nvidia.driver.update-clean";
+/// Tweak ID for NVIDIA Resizable BAR detection.
+pub const NVIDIA_REBAR_DETECT_TWEAK_ID: &str = "nvidia.rebar.detect";
+/// Tweak ID for NVIDIA frame-generation competitive policy.
+pub const NVIDIA_FRAMEGEN_POLICY_TWEAK_ID: &str = "nvidia.framegen.competitive-policy";
+/// Tweak ID for NVIDIA shader-cache state inspection.
+pub const NVIDIA_SHADER_CACHE_TWEAK_ID: &str = "nvidia.shader-cache.size";
 
 /// Tweak ID for restoring backed-up NVIDIA profile state.
 pub const NVIDIA_PROFILE_ROLLBACK_TWEAK_ID: &str = "nvidia.profile.rollback";
@@ -125,6 +137,15 @@ impl NvidiaDriverDetection {
     pub fn has_driver_version(&self) -> bool {
         matches!(self.vendor.driver_state(), GpuCapabilityState::Ready)
     }
+}
+
+/// Builds the NVIDIA view of the shared GPU platform capability plan.
+#[must_use]
+pub fn plan_nvidia_platform_capabilities(
+    detection: &NvidiaDriverDetection,
+    request: &GpuPlatformCheckRequest,
+) -> GpuPlatformCapabilityPlan {
+    plan_gpu_platform_capabilities(&detection.vendor, request)
 }
 
 /// Reflex and driver Low Latency Mode decision for PUBG.
@@ -1837,6 +1858,37 @@ mod tests {
             detection.profile_inspector_state,
             GpuCapabilityState::NotApplicable
         );
+    }
+
+    #[test]
+    fn nvidia_platform_plan_uses_shared_capability_policy() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let request = gpu::GpuPlatformCheckRequest::new(gpu::GpuPlatformIntent::CompetitiveLatency)
+            .with_driver_age_days(30)
+            .with_display(gpu::GpuDisplayPipelineState::new(
+                Some(240),
+                Some(240),
+                GpuCapabilityState::Ready,
+            ))
+            .with_rebar_sam_state(GpuCapabilityState::Ready)
+            .with_frame_generation_state(GpuCapabilityState::Ready)
+            .with_shader_cache(gpu::GpuShaderCacheState::enabled(None));
+
+        let plan = plan_nvidia_platform_capabilities(&detection, &request);
+
+        assert_eq!(plan.vendor, GpuVendor::Nvidia);
+        assert_eq!(plan.rebar_sam.label, "Resizable BAR");
+        assert_eq!(
+            plan.frame_generation.policy,
+            gpu::GpuFrameGenerationPolicy::KeepOffForCompetitive
+        );
+        assert_eq!(
+            plan.frame_generation.decision,
+            gpu::GpuPlatformDecision::KeepDisabled
+        );
+        assert!(plan.recommendations.iter().any(|recommendation| {
+            recommendation.check == gpu::GpuPlatformCheck::FrameGeneration
+        }));
     }
 
     #[test]
