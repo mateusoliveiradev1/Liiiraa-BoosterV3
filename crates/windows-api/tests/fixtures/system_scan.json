@@ -48,6 +48,13 @@
       "videoProcessor": "NVIDIA GeForce RTX 4070 SUPER",
       "adapterRamBytes": 4293918720,
       "pnpDeviceId": "PCI\\VEN_10DE&DEV_2783"
+    },
+    {
+      "name": "AMD Radeon Graphics",
+      "driverVersion": "31.0.24033.1003",
+      "videoProcessor": "AMD Radeon Graphics",
+      "adapterRamBytes": 536870912,
+      "pnpDeviceId": "PCI\\VEN_1002&DEV_164E"
     }
   ],
   "storage": {
@@ -205,6 +212,31 @@
     "mmcssSystemResponsiveness": 20,
     "win32PrioritySeparation": 2,
     "source": "fixture HKLM scheduler registry"
+  },
+  "graphics": {
+    "hags": {
+      "value": 1,
+      "supported": true,
+      "source": "fixture HKLM GraphicsDrivers HwSchMode"
+    },
+    "windowedOptimizations": {
+      "value": 0,
+      "supported": true,
+      "source": "fixture HKCU DirectX GraphicsSettings SwapEffectUpgradeEnable"
+    },
+    "variableRefreshRate": {
+      "value": 0,
+      "supported": true,
+      "source": "fixture HKCU DirectX GraphicsSettings VRR"
+    },
+    "highPerformanceGpuAvailable": true,
+    "appPreferences": [
+      {
+        "executablePath": "C:\\Program Files\\PUBG\\TslGame.exe",
+        "preference": "GpuPreference=1;"
+      }
+    ],
+    "source": "fixture Windows Graphics settings registry read-only"
   },
   "security": {
     "deviceGuard": {

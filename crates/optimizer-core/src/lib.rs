@@ -5,6 +5,7 @@ pub mod background_work;
 pub mod catalog;
 pub mod defender;
 pub mod gaming_capture;
+pub mod graphics_settings;
 pub mod ipc;
 pub mod network;
 pub mod planning;

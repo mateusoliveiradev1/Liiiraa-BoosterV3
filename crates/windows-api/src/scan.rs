@@ -73,6 +73,17 @@ function Get-PropertyValue($props, [string]$name) {
     }
 }
 
+function Get-FirstPropertyValue($props, [string[]]$names) {
+    foreach ($name in $names) {
+        $value = Get-PropertyValue $props $name
+        if ($null -ne $value) {
+            return $value
+        }
+    }
+
+    $null
+}
+
 function Measure-CleanupCandidate([string]$logicalTarget, [string]$path, [string]$kind) {
     $expanded = [Environment]::ExpandEnvironmentVariables($path)
     $exists = Test-Path -LiteralPath $expanded
@@ -418,6 +429,86 @@ $scheduler = Invoke-ScanSection "scheduler.registry" {
     source = "HKLM scheduler registry"
 })
 
+$graphics = Invoke-ScanSection "graphics.settings" {
+    $graphicsDriversPath = "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"
+    $graphicsSettingsPath = "HKCU:\Software\Microsoft\DirectX\GraphicsSettings"
+    $userGpuPreferencesPath = "HKCU:\Software\Microsoft\DirectX\UserGpuPreferences"
+    $graphicsDriversProps = Get-ItemProperty -Path $graphicsDriversPath -ErrorAction SilentlyContinue
+    $graphicsSettingsProps = Get-ItemProperty -Path $graphicsSettingsPath -ErrorAction SilentlyContinue
+    $hagsRaw = Get-PropertyValue $graphicsDriversProps "HwSchMode"
+    $windowedRaw = Get-FirstPropertyValue $graphicsSettingsProps @(
+        "SwapEffectUpgradeEnable",
+        "SwapEffectUpgrade"
+    )
+    $vrrRaw = Get-FirstPropertyValue $graphicsSettingsProps @(
+        "VariableRefreshRate",
+        "VRROptimizeEnable",
+        "VRREnable"
+    )
+    $appPreferences = @()
+
+    if (Test-Path $userGpuPreferencesPath) {
+        $preferenceProps = Get-ItemProperty -Path $userGpuPreferencesPath -ErrorAction SilentlyContinue
+        if ($null -ne $preferenceProps) {
+            $appPreferences = @($preferenceProps.PSObject.Properties | Where-Object {
+                $_.Name -notlike "PS*" -and $null -ne $_.Value
+            } | ForEach-Object {
+                [ordered]@{
+                    executablePath = [string]$_.Name
+                    preference = [string]$_.Value
+                }
+            })
+        }
+    }
+
+    $buildNumber = 0
+    $buildParsed = [Int32]::TryParse([string]$os.buildNumber, [ref]$buildNumber)
+    $windowedSupported = if ($buildParsed) { $buildNumber -ge 22000 } else { $null }
+    $hagsSupported = if ($null -ne $hagsRaw) { $true } else { $null }
+    $vrrSupported = if ($null -ne $vrrRaw) { $true } else { $null }
+    $highPerformanceGpuAvailable = @($gpus).Count -gt 1
+
+    [ordered]@{
+        hags = [ordered]@{
+            value = Convert-NullableUInt32 $hagsRaw
+            supported = $hagsSupported
+            source = "HKLM GraphicsDrivers HwSchMode"
+        }
+        windowedOptimizations = [ordered]@{
+            value = Convert-NullableUInt32 $windowedRaw
+            supported = $windowedSupported
+            source = "HKCU DirectX GraphicsSettings SwapEffectUpgradeEnable"
+        }
+        variableRefreshRate = [ordered]@{
+            value = Convert-NullableUInt32 $vrrRaw
+            supported = $vrrSupported
+            source = "HKCU DirectX GraphicsSettings VRR"
+        }
+        highPerformanceGpuAvailable = $highPerformanceGpuAvailable
+        appPreferences = @($appPreferences)
+        source = "Windows Graphics settings registry read-only"
+    }
+} ([ordered]@{
+    hags = [ordered]@{
+        value = $null
+        supported = $null
+        source = "HKLM GraphicsDrivers HwSchMode"
+    }
+    windowedOptimizations = [ordered]@{
+        value = $null
+        supported = $null
+        source = "HKCU DirectX GraphicsSettings SwapEffectUpgradeEnable"
+    }
+    variableRefreshRate = [ordered]@{
+        value = $null
+        supported = $null
+        source = "HKCU DirectX GraphicsSettings VRR"
+    }
+    highPerformanceGpuAvailable = $null
+    appPreferences = @()
+    source = "Windows Graphics settings registry read-only"
+})
+
 $deviceGuard = Invoke-ScanSection "security.device_guard" {
     $dg = Get-CimInstance -Namespace "root\Microsoft\Windows\DeviceGuard" -ClassName Win32_DeviceGuard
     [ordered]@{
@@ -532,6 +623,7 @@ $rebootRequired = [ordered]@{
     backgroundApps = $backgroundApps
     power = $power
     scheduler = $scheduler
+    graphics = $graphics
     security = [ordered]@{
         deviceGuard = $deviceGuard
         hvci = $hvci
@@ -606,6 +698,9 @@ pub struct SystemScanReport {
     /// Scheduler registry state used by Competitive scheduler planning.
     #[serde(default)]
     pub scheduler: SchedulerRegistryScan,
+    /// Windows Graphics settings state used by graphics setting planning.
+    #[serde(default)]
+    pub graphics: GraphicsSettingsScan,
     /// VBS, HVCI, VMP, Hyper-V, and Defender read-only state.
     pub security: SecurityScan,
     /// Reboot-required markers.
@@ -1013,6 +1108,69 @@ impl Default for SchedulerRegistryScan {
             source: "unavailable".to_owned(),
         }
     }
+}
+
+/// Read-only Windows Graphics settings state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GraphicsSettingsScan {
+    /// Hardware accelerated GPU scheduling state.
+    pub hags: GraphicsDwordSettingScan,
+    /// Optimizations for windowed games state.
+    pub windowed_optimizations: GraphicsDwordSettingScan,
+    /// Variable refresh rate state.
+    pub variable_refresh_rate: GraphicsDwordSettingScan,
+    /// Whether Windows exposes a high-performance GPU app preference choice.
+    pub high_performance_gpu_available: Option<bool>,
+    /// Per-app Windows Graphics preference entries.
+    #[serde(default)]
+    pub app_preferences: Vec<GraphicsAppPreferenceScanItem>,
+    /// Read-only source used for this scan section.
+    pub source: String,
+}
+
+impl Default for GraphicsSettingsScan {
+    fn default() -> Self {
+        Self {
+            hags: GraphicsDwordSettingScan {
+                source: "HKLM GraphicsDrivers HwSchMode".to_owned(),
+                ..GraphicsDwordSettingScan::default()
+            },
+            windowed_optimizations: GraphicsDwordSettingScan {
+                source: "HKCU DirectX GraphicsSettings SwapEffectUpgradeEnable".to_owned(),
+                ..GraphicsDwordSettingScan::default()
+            },
+            variable_refresh_rate: GraphicsDwordSettingScan {
+                source: "HKCU DirectX GraphicsSettings VRR".to_owned(),
+                ..GraphicsDwordSettingScan::default()
+            },
+            high_performance_gpu_available: None,
+            app_preferences: Vec::new(),
+            source: "unavailable".to_owned(),
+        }
+    }
+}
+
+/// One DWORD-like Windows Graphics settings value.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GraphicsDwordSettingScan {
+    /// Current DWORD value when available.
+    pub value: Option<u32>,
+    /// Whether the setting appears available for this machine.
+    pub supported: Option<bool>,
+    /// Read-only source used for this value.
+    pub source: String,
+}
+
+/// One per-app Windows Graphics preference registry entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GraphicsAppPreferenceScanItem {
+    /// Executable path stored by Windows Graphics settings.
+    pub executable_path: String,
+    /// Raw preference payload, such as `GpuPreference=2;`.
+    pub preference: String,
 }
 
 /// Security state inventory.

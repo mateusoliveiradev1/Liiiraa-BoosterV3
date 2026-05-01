@@ -5,6 +5,7 @@ pub mod background_work;
 pub mod command;
 pub mod defender;
 pub mod gaming;
+pub mod graphics;
 pub mod network;
 pub mod power;
 pub mod scan;
@@ -30,6 +31,11 @@ pub use gaming::{
     GamingCaptureRegistryError, GamingCaptureRegistryErrorReason,
     GamingCaptureRegistrySummary,
 };
+pub use graphics::{
+    apply_graphics_settings_plan_to_fixture, build_consented_graphics_settings_plan_from_scan,
+    build_graphics_settings_plan_from_scan, verify_graphics_settings_plan_fixture,
+    GraphicsSettingsError, GraphicsSettingsErrorReason, GraphicsSettingsSummary,
+};
 pub use network::{
     apply_network_adapter_power_plan_to_fixture,
     build_consented_network_adapter_power_plan_from_scan,
@@ -45,7 +51,8 @@ pub use power::{
 };
 pub use scan::{
     parse_system_scan_report, scan_system, BackgroundAppScanItem, CpuScanItem, DefenderScan,
-    DirectStorageScan, GpuScanItem, MemoryModuleScanItem, MemoryScan,
+    DirectStorageScan, GpuScanItem, GraphicsAppPreferenceScanItem, GraphicsDwordSettingScan,
+    GraphicsSettingsScan, MemoryModuleScanItem, MemoryScan,
     NetworkAdapterAdvancedPropertyScanItem, NetworkAdapterPowerManagementScan,
     NetworkAdapterScanItem, OsScan, PhysicalDiskScanItem, PowerPlanScan, RebootRequiredScan,
     ScheduledTaskScanItem, SchedulerRegistryScan, SecurityScan, ServiceScanItem, StartupAppScanItem,
