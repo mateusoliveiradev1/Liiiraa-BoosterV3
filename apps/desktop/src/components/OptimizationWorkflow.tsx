@@ -356,9 +356,30 @@ export function OptimizeWorkflowView({ data }: OptimizeViewProps) {
 }
 
 export function RollbackWorkflowView({ data }: RollbackViewProps) {
+  const gpuProfileSessions = data.sessions.filter(hasGpuProfileRollback);
+
   return (
     <div style={viewGridStyle} aria-label="Rollback workflow">
-      <WorkflowHeader eyebrow="Rollback" title="Session recovery timeline" />
+      <WorkflowHeader
+        eyebrow="Rollback"
+        title="Session recovery timeline"
+        actions={<RollbackActionBar sessions={data.sessions} />}
+      />
+      <div style={twoColumnStyle}>
+        <Surface title="Restore queue" eyebrow="Session-level recovery">
+          <DefinitionGrid
+            items={[
+              ["Sessions ready", String(data.sessions.length)],
+              ["GPU profile backups", String(gpuProfileSessions.length)],
+              ["Restore mode", "All changed values in a session"],
+              ["Verification", "Readback before completion"]
+            ]}
+          />
+        </Surface>
+        <Surface title="GPU profile rollback" eyebrow="NVIDIA export restore">
+          <GpuRollbackFlow sessions={gpuProfileSessions} />
+        </Surface>
+      </div>
       <div style={viewGridStyle}>
         {data.sessions.map((session) => (
           <Surface
@@ -368,6 +389,7 @@ export function RollbackWorkflowView({ data }: RollbackViewProps) {
             badge={session.rebootRequired ? "Reboot required" : "No reboot"}
           >
             <p className="workflow-muted">{session.summary}</p>
+            <SessionRollbackActions session={session} />
             <RollbackTable items={session.items} />
           </Surface>
         ))}
@@ -483,6 +505,96 @@ export function PlanActionBar({ actions }: { actions: PlanAction[] }) {
         </button>
       ))}
     </div>
+  );
+}
+
+function RollbackActionBar({ sessions }: { sessions: RollbackSession[] }) {
+  const hasGpuSession = sessions.some(hasGpuProfileRollback);
+
+  return (
+    <div className="action-bar" aria-label="Rollback actions">
+      <button className="button button--primary" title="Restore selected session" type="button">
+        Restore all
+      </button>
+      {hasGpuSession ? (
+        <button className="button button--secondary" title="Restore NVIDIA profile backup" type="button">
+          Restore GPU profiles
+        </button>
+      ) : null}
+      <button className="button button--ghost" title="Export rollback audit" type="button">
+        Export audit
+      </button>
+    </div>
+  );
+}
+
+function SessionRollbackActions({ session }: { session: RollbackSession }) {
+  const hasGpuSession = hasGpuProfileRollback(session);
+
+  return (
+    <div className="rollback-actions" aria-label={`${session.label} rollback actions`}>
+      <button
+        className="button button--secondary"
+        title={`Restore all changes from ${session.label}`}
+        type="button"
+      >
+        Restore all
+      </button>
+      {hasGpuSession ? (
+        <button
+          className="button button--ghost"
+          title={`Restore GPU profiles from ${session.label}`}
+          type="button"
+        >
+          Restore GPU profiles
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function GpuRollbackFlow({ sessions }: { sessions: RollbackSession[] }) {
+  if (sessions.length === 0) {
+    return (
+      <StatusRow
+        label="Profile backup"
+        value="Unavailable"
+        detail="No GPU profile snapshot is attached to the visible sessions."
+        tone="neutral"
+      />
+    );
+  }
+
+  const profileItems = sessions.flatMap((session) =>
+    session.items.filter(isGpuProfileRollbackItem).map((item) => ({
+      ...item,
+      sessionLabel: session.label
+    }))
+  );
+
+  return (
+    <div style={compactRowStyle}>
+      {profileItems.map((item) => (
+        <StatusRow
+          key={`${item.sessionLabel}-${item.id}`}
+          label={item.label}
+          value={item.state}
+          detail={`${item.before} -> ${item.after}; ${item.rollback}`}
+          tone={item.state.toLowerCase().includes("ready") ? "success" : "warning"}
+        />
+      ))}
+    </div>
+  );
+}
+
+function hasGpuProfileRollback(session: RollbackSession) {
+  return session.items.some(isGpuProfileRollbackItem);
+}
+
+function isGpuProfileRollbackItem(item: RollbackItem) {
+  return (
+    item.id.startsWith("nvidia.") ||
+    /gpu|nvidia|profile/i.test(`${item.label} ${item.rollback}`)
   );
 }
 

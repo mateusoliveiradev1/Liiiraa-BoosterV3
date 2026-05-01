@@ -215,7 +215,8 @@ button {
 .page-header,
 .section-heading,
 .header-actions,
-.action-bar {
+.action-bar,
+.rollback-actions {
   display: flex;
   align-items: center;
 }
@@ -256,10 +257,15 @@ button {
 }
 
 .header-actions,
-.action-bar {
+.action-bar,
+.rollback-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.6rem;
+}
+
+.rollback-actions {
+  justify-content: flex-start;
 }
 
 .button {
@@ -673,7 +679,8 @@ button {
   }
 
   .header-actions,
-  .action-bar {
+  .action-bar,
+  .rollback-actions {
     justify-content: stretch;
     width: 100%;
   }

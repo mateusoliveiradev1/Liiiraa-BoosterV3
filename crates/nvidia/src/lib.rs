@@ -13,6 +13,9 @@ pub const NVIDIA_GLOBAL_PROFILE_TWEAK_ID: &str = "nvidia.global.profile";
 /// Tweak ID for the PUBG competitive NVIDIA application profile.
 pub const NVIDIA_PUBG_PROFILE_TWEAK_ID: &str = "nvidia.pubg.profile";
 
+/// Tweak ID for restoring backed-up NVIDIA profile state.
+pub const NVIDIA_PROFILE_ROLLBACK_TWEAK_ID: &str = "nvidia.profile.rollback";
+
 /// Driver profile name owned by Liiiraa for conservative global performance defaults.
 pub const LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME: &str =
     "Liiiraa Boost - Global Performance";
@@ -554,6 +557,21 @@ pub struct NvidiaProfileBackup {
     pub rollback_kind: &'static str,
 }
 
+/// Result of restoring NVIDIA profiles from a captured rollback backup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NvidiaProfileRollbackResult {
+    /// Tweak ID that produced this rollback mutation.
+    pub tweak_id: &'static str,
+    /// Fingerprint of the backup used for rollback.
+    pub backup_fingerprint: String,
+    /// Profiles restored from the backup payload.
+    pub restored_profiles: Vec<NvidiaProfile>,
+    /// Liiiraa-owned profiles deleted because they did not exist in the backup.
+    pub deleted_profiles: Vec<NvidiaProfile>,
+    /// Profile store snapshot observed after rollback verification.
+    pub verified_snapshot: NvidiaProfileSnapshot,
+}
+
 /// Failure while reading or backing up NVIDIA driver profiles.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NvidiaProfileError {
@@ -578,6 +596,11 @@ pub enum NvidiaProfileError {
     },
     /// The bridge failed while writing a profile.
     ProfileWriteFailed {
+        /// Error message from the bridge implementation.
+        message: String,
+    },
+    /// The bridge failed while deleting a created profile during rollback.
+    ProfileDeleteFailed {
         /// Error message from the bridge implementation.
         message: String,
     },
@@ -619,6 +642,27 @@ pub enum NvidiaProfileError {
     },
     /// The backup request filtered out all readback profiles.
     NoProfilesSelected,
+    /// The backup fingerprint did not match the profile payload.
+    BackupIntegrityMismatch {
+        /// Fingerprint stored with the backup.
+        expected: String,
+        /// Fingerprint calculated from the backup payload.
+        actual: String,
+    },
+    /// The rollback bridge cannot safely restore this backup shape.
+    RollbackBridgeMismatch {
+        /// Bridge key stored in the backup.
+        backup_bridge: String,
+        /// Bridge key selected for rollback.
+        rollback_bridge: String,
+    },
+    /// Post-rollback readback did not match the expected restored profile state.
+    RollbackVerificationFailed {
+        /// Profile that failed verification.
+        profile: String,
+        /// Verification failure reason.
+        reason: String,
+    },
 }
 
 impl fmt::Display for NvidiaProfileError {
@@ -636,6 +680,9 @@ impl fmt::Display for NvidiaProfileError {
             }
             Self::ProfileWriteFailed { message } => {
                 write!(formatter, "NVIDIA profile bridge write failed: {message}")
+            }
+            Self::ProfileDeleteFailed { message } => {
+                write!(formatter, "NVIDIA profile bridge delete failed: {message}")
             }
             Self::InvalidProfile { profile, reason } => {
                 write!(formatter, "invalid NVIDIA profile {profile:?}: {reason}")
@@ -674,6 +721,27 @@ impl fmt::Display for NvidiaProfileError {
             Self::NoProfilesSelected => {
                 formatter.write_str("backup request did not select any NVIDIA profiles")
             }
+            Self::BackupIntegrityMismatch { expected, actual } => {
+                write!(
+                    formatter,
+                    "NVIDIA profile backup fingerprint mismatch: expected {expected}, got {actual}"
+                )
+            }
+            Self::RollbackBridgeMismatch {
+                backup_bridge,
+                rollback_bridge,
+            } => {
+                write!(
+                    formatter,
+                    "NVIDIA profile backup bridge {backup_bridge:?} cannot be restored through {rollback_bridge:?}"
+                )
+            }
+            Self::RollbackVerificationFailed { profile, reason } => {
+                write!(
+                    formatter,
+                    "NVIDIA profile rollback verification failed for {profile:?}: {reason}"
+                )
+            }
         }
     }
 }
@@ -702,6 +770,12 @@ pub trait NvidiaProfileWriteBridge: NvidiaProfileBridge {
         &mut self,
         profile: NvidiaProfile,
     ) -> Result<(), NvidiaProfileError>;
+}
+
+/// Bridge for restoring NVIDIA profile backups and removing created Liiiraa profiles.
+pub trait NvidiaProfileRollbackBridge: NvidiaProfileWriteBridge {
+    /// Deletes a global or application profile that did not exist in the backup.
+    fn delete_profile(&mut self, profile: NvidiaProfile) -> Result<(), NvidiaProfileError>;
 }
 
 /// Result of applying and verifying the conservative Liiiraa global profile.
@@ -1134,6 +1208,56 @@ pub fn apply_pubg_competitive_profile<B: NvidiaProfileWriteBridge>(
     })
 }
 
+/// Restores NVIDIA profiles from a rollback backup and verifies post-rollback readback.
+pub fn rollback_profiles_from_backup<B: NvidiaProfileRollbackBridge>(
+    detection: &NvidiaDriverDetection,
+    bridge: &mut B,
+    backup: &NvidiaProfileBackup,
+) -> Result<NvidiaProfileRollbackResult, NvidiaProfileError> {
+    validate_profile_backup(backup)?;
+
+    let rollback_bridge = bridge.kind();
+    validate_bridge(detection, &rollback_bridge)?;
+    if rollback_bridge.stable_key() != backup.snapshot.bridge_kind.stable_key() {
+        return Err(NvidiaProfileError::RollbackBridgeMismatch {
+            backup_bridge: backup.snapshot.bridge_kind.stable_key().to_owned(),
+            rollback_bridge: rollback_bridge.stable_key().to_owned(),
+        });
+    }
+
+    let restored_profiles = backup.snapshot.profiles.clone();
+    for profile in &restored_profiles {
+        match profile.scope {
+            NvidiaProfileScope::Global => bridge.write_global_profile(profile.clone())?,
+            NvidiaProfileScope::Application => bridge.write_application_profile(profile.clone())?,
+        }
+    }
+
+    let snapshot_after_restore = readback_profiles(detection, &*bridge)?;
+    let mut deleted_profiles = Vec::new();
+    for profile in owned_liiiraa_profiles_missing_from_backup(&backup.snapshot) {
+        if snapshot_after_restore
+            .profiles
+            .iter()
+            .any(|current| same_profile_identity(current, &profile))
+        {
+            bridge.delete_profile(profile.clone())?;
+            deleted_profiles.push(profile);
+        }
+    }
+
+    let verified_snapshot = readback_profiles(detection, &*bridge)?;
+    verify_rollback_snapshot(&backup.snapshot, &verified_snapshot)?;
+
+    Ok(NvidiaProfileRollbackResult {
+        tweak_id: NVIDIA_PROFILE_ROLLBACK_TWEAK_ID,
+        backup_fingerprint: backup.fingerprint.clone(),
+        restored_profiles,
+        deleted_profiles,
+        verified_snapshot,
+    })
+}
+
 /// Produces a stable non-cryptographic fingerprint for one profile snapshot.
 #[must_use]
 pub fn stable_profile_fingerprint(snapshot: &NvidiaProfileSnapshot) -> String {
@@ -1161,6 +1285,26 @@ pub fn stable_profile_fingerprint(snapshot: &NvidiaProfileSnapshot) -> String {
     }
 
     format!("{hash:016x}")
+}
+
+fn validate_profile_backup(backup: &NvidiaProfileBackup) -> Result<(), NvidiaProfileError> {
+    if backup.snapshot.profiles.is_empty() {
+        return Err(NvidiaProfileError::NoProfilesSelected);
+    }
+
+    for profile in &backup.snapshot.profiles {
+        validate_profile(profile)?;
+    }
+
+    let actual = stable_profile_fingerprint(&backup.snapshot);
+    if actual != backup.fingerprint {
+        return Err(NvidiaProfileError::BackupIntegrityMismatch {
+            expected: backup.fingerprint.clone(),
+            actual,
+        });
+    }
+
+    Ok(())
 }
 
 fn hash_text(hash: &mut u64, value: &str, prime: u64) {
@@ -1263,6 +1407,84 @@ fn normalized_strings(values: Vec<String>) -> Vec<String> {
     values.sort();
     values.dedup();
     values
+}
+
+fn owned_liiiraa_profiles_missing_from_backup(
+    snapshot: &NvidiaProfileSnapshot,
+) -> Vec<NvidiaProfile> {
+    liiiraa_owned_profile_identities()
+        .into_iter()
+        .filter(|profile| {
+            !snapshot
+                .profiles
+                .iter()
+                .any(|backup_profile| same_profile_identity(backup_profile, profile))
+        })
+        .collect()
+}
+
+fn liiiraa_owned_profile_identities() -> Vec<NvidiaProfile> {
+    vec![
+        NvidiaProfile::global(LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME, Vec::new()),
+        NvidiaProfile::application(
+            LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME,
+            vec![PUBG_EXECUTABLE_NAME.to_owned()],
+            Vec::new(),
+        ),
+    ]
+}
+
+fn same_profile_identity(left: &NvidiaProfile, right: &NvidiaProfile) -> bool {
+    left.scope == right.scope && left.name == right.name
+}
+
+fn profile_identity_label(profile: &NvidiaProfile) -> String {
+    match profile.scope {
+        NvidiaProfileScope::Global => format!("global:{}", profile.name),
+        NvidiaProfileScope::Application => {
+            format!("application:{}:{}", profile.name, profile.applications.join(","))
+        }
+    }
+}
+
+fn verify_rollback_snapshot(
+    expected: &NvidiaProfileSnapshot,
+    actual: &NvidiaProfileSnapshot,
+) -> Result<(), NvidiaProfileError> {
+    for expected_profile in &expected.profiles {
+        let Some(actual_profile) = actual
+            .profiles
+            .iter()
+            .find(|profile| same_profile_identity(profile, expected_profile))
+        else {
+            return Err(NvidiaProfileError::RollbackVerificationFailed {
+                profile: profile_identity_label(expected_profile),
+                reason: "restored profile was not present in readback".to_owned(),
+            });
+        };
+
+        if actual_profile != expected_profile {
+            return Err(NvidiaProfileError::RollbackVerificationFailed {
+                profile: profile_identity_label(expected_profile),
+                reason: "restored profile values did not match the backup".to_owned(),
+            });
+        }
+    }
+
+    for deleted_profile in owned_liiiraa_profiles_missing_from_backup(expected) {
+        if actual
+            .profiles
+            .iter()
+            .any(|profile| same_profile_identity(profile, &deleted_profile))
+        {
+            return Err(NvidiaProfileError::RollbackVerificationFailed {
+                profile: profile_identity_label(&deleted_profile),
+                reason: "created Liiiraa profile still exists after rollback".to_owned(),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_profile(profile: &NvidiaProfile) -> Result<(), NvidiaProfileError> {
@@ -1439,6 +1661,7 @@ mod tests {
         kind: NvidiaProfileBridgeKind,
         profiles: Vec<NvidiaProfile>,
         writes: Vec<NvidiaProfile>,
+        deletes: Vec<NvidiaProfile>,
         tampered_write: Option<(String, String)>,
     }
 
@@ -1448,6 +1671,7 @@ mod tests {
                 kind,
                 profiles,
                 writes: Vec::new(),
+                deletes: Vec::new(),
                 tampered_write: None,
             }
         }
@@ -1462,6 +1686,7 @@ mod tests {
                 kind,
                 profiles,
                 writes: Vec::new(),
+                deletes: Vec::new(),
                 tampered_write: Some((setting_id.to_owned(), value.to_owned())),
             }
         }
@@ -1541,6 +1766,17 @@ mod tests {
                     || existing.name != profile.name.as_str()
             });
             self.profiles.push(profile);
+
+            Ok(())
+        }
+    }
+
+    impl NvidiaProfileRollbackBridge for FixtureProfileBridge {
+        fn delete_profile(&mut self, profile: NvidiaProfile) -> Result<(), NvidiaProfileError> {
+            validate_profile(&profile)?;
+            self.deletes.push(profile.clone());
+            self.profiles
+                .retain(|existing| !same_profile_identity(existing, &profile));
 
             Ok(())
         }
@@ -2040,6 +2276,148 @@ mod tests {
                 if processes == vec!["BEService.exe".to_owned()]
         ));
         assert!(bridge.writes.is_empty());
+    }
+
+    #[test]
+    fn profile_rollback_restores_backup_and_deletes_created_liiiraa_profiles() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let mut bridge = FixtureProfileBridge::new(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![NvidiaProfile::global(
+                "Base Profile",
+                vec![NvidiaProfileSetting::new(
+                    "power-management-mode",
+                    "Power management mode",
+                    "Prefer maximum performance",
+                    NvidiaProfileSettingVisibility::UserVisible,
+                )],
+            )],
+        );
+
+        let apply = apply_global_performance_profile(&detection, &mut bridge)
+            .expect("apply should create a Liiiraa global profile");
+
+        assert!(bridge.profiles.iter().any(|profile| {
+            profile.name == LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME
+                && profile.scope == NvidiaProfileScope::Global
+        }));
+
+        let rollback = rollback_profiles_from_backup(&detection, &mut bridge, &apply.backup)
+            .expect("rollback should restore the captured profile backup");
+
+        assert_eq!(rollback.tweak_id, NVIDIA_PROFILE_ROLLBACK_TWEAK_ID);
+        assert_eq!(rollback.restored_profiles.len(), 1);
+        assert_eq!(rollback.deleted_profiles.len(), 1);
+        assert_eq!(
+            rollback.deleted_profiles[0].name,
+            LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME
+        );
+        assert!(!bridge.profiles.iter().any(|profile| {
+            profile.name == LIIIRAA_GLOBAL_PERFORMANCE_PROFILE_NAME
+                && profile.scope == NvidiaProfileScope::Global
+        }));
+        assert!(rollback
+            .verified_snapshot
+            .profiles
+            .iter()
+            .any(|profile| profile.name == "Base Profile"));
+    }
+
+    #[test]
+    fn profile_rollback_restores_existing_liiiraa_profile_values() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let original_profile = NvidiaProfile::application(
+            LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME,
+            vec![PUBG_EXECUTABLE_NAME.to_owned()],
+            vec![
+                NvidiaProfileSetting::new(
+                    "max-frame-rate",
+                    "Max Frame Rate",
+                    "Off",
+                    NvidiaProfileSettingVisibility::UserVisible,
+                ),
+                NvidiaProfileSetting::new(
+                    "low-latency-mode",
+                    "Low Latency Mode",
+                    "Off",
+                    NvidiaProfileSettingVisibility::UserVisible,
+                ),
+            ],
+        );
+        let mut bridge = FixtureProfileBridge::new(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![
+                NvidiaProfile::global("Base Profile", Vec::new()),
+                original_profile.clone(),
+            ],
+        );
+        let backup = backup_profiles(
+            &detection,
+            &bridge,
+            NvidiaProfileBackupRequest::all_profiles_before_mutation(),
+        )
+        .expect("backup should capture the existing Liiiraa PUBG profile");
+        let request = NvidiaPubgCompetitiveProfileRequest::new(
+            Some(165),
+            true,
+            true,
+            GpuCapabilityState::Ready,
+            PubgRuntimeState::no_processes(),
+        );
+
+        apply_pubg_competitive_profile(&detection, &mut bridge, &request)
+            .expect("apply should replace the Liiiraa PUBG profile");
+        assert_eq!(
+            setting(
+                bridge
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.name == LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME)
+                    .expect("Liiiraa profile should exist after apply"),
+                "max-frame-rate"
+            )
+            .value,
+            "162 FPS"
+        );
+
+        let rollback = rollback_profiles_from_backup(&detection, &mut bridge, &backup)
+            .expect("rollback should restore backed-up profile settings");
+        let restored = rollback
+            .verified_snapshot
+            .profiles
+            .iter()
+            .find(|profile| profile.name == LIIIRAA_PUBG_COMPETITIVE_PROFILE_NAME)
+            .expect("restored Liiiraa profile should remain present");
+
+        assert!(rollback.deleted_profiles.is_empty());
+        assert_eq!(setting(restored, "max-frame-rate").value, "Off");
+        assert_eq!(setting(restored, "low-latency-mode").value, "Off");
+        assert_eq!(setting(&original_profile, "max-frame-rate").value, "Off");
+    }
+
+    #[test]
+    fn profile_rollback_rejects_tampered_backup_payload() {
+        let detection = ready_detection(GpuCapabilityState::Ready, GpuCapabilityState::Missing);
+        let bridge = FixtureProfileBridge::new(
+            NvidiaProfileBridgeKind::NvapiDriverSettings,
+            vec![NvidiaProfile::global("Base Profile", Vec::new())],
+        );
+        let mut backup = backup_profiles(
+            &detection,
+            &bridge,
+            NvidiaProfileBackupRequest::all_profiles_before_mutation(),
+        )
+        .expect("backup should capture");
+        backup.fingerprint = "0000000000000000".to_owned();
+        let mut rollback_bridge = bridge.clone();
+
+        let error = rollback_profiles_from_backup(&detection, &mut rollback_bridge, &backup)
+            .expect_err("tampered backups must not restore");
+
+        assert!(matches!(
+            error,
+            NvidiaProfileError::BackupIntegrityMismatch { .. }
+        ));
     }
 
     #[test]
