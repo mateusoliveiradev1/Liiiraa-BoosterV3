@@ -59,11 +59,12 @@ pub use scan::{
     DirectStorageScan, GpuScanItem, GraphicsAppPreferenceScanItem, GraphicsDwordSettingScan,
     GraphicsSettingsScan, MemoryModuleScanItem, MemoryScan,
     NetworkAdapterAdvancedPropertyScanItem, NetworkAdapterPowerManagementScan,
-    NetworkAdapterScanItem, OsScan, PhysicalDiskScanItem, PowerPlanScan, RebootRequiredScan,
-    ScheduledTaskScanItem, SchedulerRegistryScan, SecurityScan, ServiceScanItem, StartupAppScanItem,
-    StorageCleanupCandidateScanItem, StorageCleanupScan, StorageScan, StorageSenseScan,
-    StorageTrimScan, StorageVolumeScanItem, SystemScanError, SystemScanErrorReason,
-    SystemScanMode, SystemScanReport, WindowsOptionalFeatureScanItem, WindowsSystemScanner,
+    NetworkAdapterScanItem, NtfsMetadataScan, OsScan, PhysicalDiskScanItem, PowerPlanScan,
+    RebootRequiredScan, ScheduledTaskScanItem, SchedulerRegistryScan, SecurityScan,
+    ServiceScanItem, StartupAppScanItem, StorageCleanupCandidateScanItem, StorageCleanupScan,
+    StorageScan, StorageSenseScan, StorageTrimScan, StorageVolumeScanItem, SystemScanError,
+    SystemScanErrorReason, SystemScanMode, SystemScanReport, WindowsOptionalFeatureScanItem,
+    WindowsSystemScanner,
 };
 pub use scheduler::{
     apply_scheduler_competitive_plan_to_fixture,
@@ -78,9 +79,14 @@ pub use security_tradeoff::{
     SecurityTradeoffSettingsErrorReason, SecurityTradeoffSettingsSummary,
 };
 pub use storage::{
+    apply_ntfs_metadata_plan_to_fixture,
     apply_storage_sense_plan_to_fixture, build_consented_storage_sense_plan_from_scan,
-    build_storage_readiness_plan_from_scan, verify_storage_sense_plan_fixture,
-    StorageSenseRegistryError, StorageSenseRegistryErrorReason, StorageSenseRegistrySummary,
+    build_consented_ntfs_metadata_plan_from_scan, build_ntfs_metadata_plan_from_scan,
+    build_storage_readiness_plan_from_scan, parse_ntfs_8dot3_fsutil_value,
+    parse_ntfs_last_access_fsutil_value, verify_ntfs_metadata_plan_fixture,
+    verify_storage_sense_plan_fixture, NtfsMetadataSettingsError,
+    NtfsMetadataSettingsErrorReason, NtfsMetadataSettingsSummary, StorageSenseRegistryError,
+    StorageSenseRegistryErrorReason, StorageSenseRegistrySummary,
 };
 pub use windows_update::{
     apply_windows_update_plan_to_fixture, build_windows_update_plan_from_scan,

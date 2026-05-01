@@ -10,6 +10,8 @@ const MAX_ARGUMENT_LEN: usize = 128;
 pub enum FixedWindowsExecutable {
     /// Windows power configuration utility.
     PowerCfg,
+    /// Windows file-system utility.
+    FsUtil,
 }
 
 impl FixedWindowsExecutable {
@@ -18,6 +20,7 @@ impl FixedWindowsExecutable {
     pub const fn name(self) -> &'static str {
         match self {
             Self::PowerCfg => "powercfg",
+            Self::FsUtil => "fsutil",
         }
     }
 
@@ -26,6 +29,7 @@ impl FixedWindowsExecutable {
     pub const fn path(self) -> &'static str {
         match self {
             Self::PowerCfg => "C:\\Windows\\System32\\powercfg.exe",
+            Self::FsUtil => "C:\\Windows\\System32\\fsutil.exe",
         }
     }
 }
@@ -185,6 +189,40 @@ impl StructuredCommandPlan {
         Self::new(FixedWindowsExecutable::PowerCfg, ["/delete", scheme_guid])
     }
 
+    /// Builds the fixed command plan for querying NTFS last-access behavior.
+    pub fn fsutil_query_disable_last_access() -> Result<Self, WindowsCommandPlanError> {
+        Self::new(
+            FixedWindowsExecutable::FsUtil,
+            ["behavior", "query", "DisableLastAccess"],
+        )
+    }
+
+    /// Builds the fixed command plan for setting NTFS last-access behavior.
+    pub fn fsutil_set_disable_last_access(value: u32) -> Result<Self, WindowsCommandPlanError> {
+        Self::new(
+            FixedWindowsExecutable::FsUtil,
+            [
+                "behavior".to_owned(),
+                "set".to_owned(),
+                "DisableLastAccess".to_owned(),
+                value.to_string(),
+            ],
+        )
+    }
+
+    /// Builds the fixed command plan for querying NTFS 8.3 name behavior.
+    pub fn fsutil_query_disable_8dot3() -> Result<Self, WindowsCommandPlanError> {
+        Self::new(FixedWindowsExecutable::FsUtil, ["8dot3name", "query"])
+    }
+
+    /// Builds the fixed command plan for setting NTFS 8.3 name behavior.
+    pub fn fsutil_set_disable_8dot3(value: u32) -> Result<Self, WindowsCommandPlanError> {
+        Self::new(
+            FixedWindowsExecutable::FsUtil,
+            ["8dot3name".to_owned(), "set".to_owned(), value.to_string()],
+        )
+    }
+
     /// Returns the fixed executable.
     #[must_use]
     pub const fn executable(&self) -> FixedWindowsExecutable {
@@ -284,6 +322,25 @@ mod tests {
         assert_eq!(rename.arguments()[2].as_str(), "Liiiraa Boost - Performance");
         assert_eq!(setting.arguments()[0].as_str(), "/setacvalueindex");
         assert_eq!(setting.arguments()[4].as_str(), "0");
+    }
+
+    #[test]
+    fn fsutil_plan_uses_fixed_executable_and_ntfs_arguments() {
+        let last_access = StructuredCommandPlan::fsutil_set_disable_last_access(1)
+            .expect("fsutil last-access plan should be valid");
+        let eight_dot_three = StructuredCommandPlan::fsutil_set_disable_8dot3(1)
+            .expect("fsutil 8dot3 plan should be valid");
+
+        assert_eq!(last_access.executable(), FixedWindowsExecutable::FsUtil);
+        assert_eq!(
+            last_access.executable().path(),
+            "C:\\Windows\\System32\\fsutil.exe"
+        );
+        assert_eq!(last_access.arguments()[0].as_str(), "behavior");
+        assert_eq!(last_access.arguments()[2].as_str(), "DisableLastAccess");
+        assert_eq!(last_access.arguments()[3].as_str(), "1");
+        assert_eq!(eight_dot_three.arguments()[0].as_str(), "8dot3name");
+        assert_eq!(eight_dot_three.arguments()[2].as_str(), "1");
     }
 
     #[test]

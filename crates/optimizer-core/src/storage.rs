@@ -1,4 +1,4 @@
-//! Safe planning for Storage Sense, cleanup preview, TRIM, and DirectStorage readiness.
+//! Safe planning for Storage Sense, cleanup preview, TRIM, DirectStorage, and NTFS metadata.
 
 use crate::{
     catalog::SUPPORTED_CATALOG_SCHEMA_VERSION,
@@ -19,6 +19,10 @@ pub const STORAGE_TRIM_VERIFY_TWEAK_ID: &str = "storage.trim.verify";
 pub const STORAGE_DIRECTSTORAGE_CHECK_TWEAK_ID: &str = "storage.directstorage.check";
 /// Tweak ID for denying unsupported NVMe driver registry hacks.
 pub const STORAGE_NVME_DRIVER_HACK_TWEAK_ID: &str = "storage.nvme.driver-hack";
+/// Tweak ID for disabling NTFS last-access timestamp updates after compatibility review.
+pub const STORAGE_NTFS_LAST_ACCESS_TWEAK_ID: &str = "storage.ntfs.last-access";
+/// Tweak ID for disabling NTFS 8.3 name creation for future files after compatibility review.
+pub const STORAGE_NTFS_8DOT3_TWEAK_ID: &str = "storage.ntfs.8dot3";
 
 /// HKCU Storage Sense global enable value.
 pub const TARGET_STORAGE_SENSE_ENABLED: &str =
@@ -44,8 +48,14 @@ pub const TARGET_OPTIMIZE_VOLUME_SUPPORTED: &str = "optimize-volume:supported";
 pub const TARGET_DIRECTSTORAGE_READINESS: &str = "directstorage:readiness";
 /// Unsupported storage driver hack denial target.
 pub const TARGET_UNSUPPORTED_NVME_DRIVER_HACK: &str = "blocked:storage/nvme-driver-hack";
+/// NTFS DisableLastAccess state exposed by fsutil.
+pub const TARGET_NTFS_DISABLE_LAST_ACCESS: &str = "fsutil:behavior/disablelastaccess";
+/// NTFS Disable8dot3 state exposed by fsutil.
+pub const TARGET_NTFS_DISABLE_8DOT3: &str = "fsutil:8dot3name/disable8dot3";
 
 const CLEANUP_TARGET_PREFIX: &str = "cleanup-preview:";
+const DESIRED_DISABLE_LAST_ACCESS_VALUE: &str = "1";
+const DESIRED_DISABLE_8DOT3_VALUE: &str = "1";
 
 /// Explicit user consent for prompt-only storage controls.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -353,6 +363,130 @@ impl DirectStorageInspection {
     }
 }
 
+/// Compatibility risk found before applying NTFS metadata tweaks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NtfsMetadataCompatibility {
+    /// No known workload depends on the legacy behavior.
+    LowRisk,
+    /// Compatibility has not been proven yet.
+    Unknown,
+    /// A backup, compliance, installer, or legacy application dependency is known.
+    KnownDependency,
+}
+
+impl NtfsMetadataCompatibility {
+    const fn is_low_risk(self) -> bool {
+        matches!(self, Self::LowRisk)
+    }
+
+    const fn has_known_dependency(self) -> bool {
+        matches!(self, Self::KnownDependency)
+    }
+}
+
+/// NTFS last-access update state from `fsutil behavior query DisableLastAccess`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NtfsLastAccessState {
+    /// Last-access timestamp updates are enabled.
+    Enabled {
+        /// Raw fsutil value.
+        raw_value: u32,
+    },
+    /// Last-access timestamp updates are disabled.
+    Disabled {
+        /// Raw fsutil value.
+        raw_value: u32,
+    },
+    /// The fsutil output could not be parsed.
+    Unknown,
+}
+
+impl NtfsLastAccessState {
+    /// Converts fsutil DisableLastAccess values to state.
+    #[must_use]
+    pub const fn from_disable_last_access_value(value: Option<u32>) -> Self {
+        match value {
+            Some(0) => Self::Enabled { raw_value: 0 },
+            Some(2) => Self::Enabled { raw_value: 2 },
+            Some(1) => Self::Disabled { raw_value: 1 },
+            Some(3) => Self::Disabled { raw_value: 3 },
+            _ => Self::Unknown,
+        }
+    }
+
+    const fn is_disabled(self) -> bool {
+        matches!(self, Self::Disabled { .. })
+    }
+
+    const fn raw_value(self) -> Option<u32> {
+        match self {
+            Self::Enabled { raw_value } | Self::Disabled { raw_value } => Some(raw_value),
+            Self::Unknown => None,
+        }
+    }
+
+    fn as_state(self) -> String {
+        match self {
+            Self::Enabled { raw_value } => format!("enabled:{raw_value}"),
+            Self::Disabled { raw_value } => format!("disabled:{raw_value}"),
+            Self::Unknown => "unknown".to_owned(),
+        }
+    }
+}
+
+/// NTFS 8.3 name-creation state from `fsutil 8dot3name query`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NtfsEightDotThreeNameState {
+    /// 8.3 name creation is enabled for all volumes.
+    EnabledAll,
+    /// 8.3 name creation is disabled for all volumes.
+    DisabledAll,
+    /// 8.3 behavior is controlled per volume.
+    PerVolume,
+    /// 8.3 creation is disabled except on the system volume.
+    DisabledExceptSystemVolume,
+    /// The fsutil output could not be parsed.
+    Unknown,
+}
+
+impl NtfsEightDotThreeNameState {
+    /// Converts fsutil Disable8dot3 registry values to state.
+    #[must_use]
+    pub const fn from_disable_8dot3_value(value: Option<u32>) -> Self {
+        match value {
+            Some(0) => Self::EnabledAll,
+            Some(1) => Self::DisabledAll,
+            Some(2) => Self::PerVolume,
+            Some(3) => Self::DisabledExceptSystemVolume,
+            _ => Self::Unknown,
+        }
+    }
+
+    const fn is_disabled_for_new_files(self) -> bool {
+        matches!(self, Self::DisabledAll | Self::DisabledExceptSystemVolume)
+    }
+
+    const fn raw_value(self) -> Option<u32> {
+        match self {
+            Self::EnabledAll => Some(0),
+            Self::DisabledAll => Some(1),
+            Self::PerVolume => Some(2),
+            Self::DisabledExceptSystemVolume => Some(3),
+            Self::Unknown => None,
+        }
+    }
+
+    const fn as_state(self) -> &'static str {
+        match self {
+            Self::EnabledAll => "enabled_all:0",
+            Self::DisabledAll => "disabled_all:1",
+            Self::PerVolume => "per_volume:2",
+            Self::DisabledExceptSystemVolume => "disabled_except_system_volume:3",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
 /// Request used to build the T044 storage readiness plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageReadinessPlanRequest {
@@ -394,6 +528,44 @@ impl StorageReadinessPlanRequest {
     }
 }
 
+/// Request used to build the T054 NTFS metadata plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NtfsMetadataPlanRequest {
+    /// Stable plan ID supplied by the caller.
+    pub plan_id: String,
+    /// Highest mode requested by the user.
+    pub requested_mode: TweakMode,
+    /// Current NTFS last-access update state.
+    pub last_access_state: NtfsLastAccessState,
+    /// Explicit consent for changing last-access behavior.
+    pub last_access_consent: StorageControlConsent,
+    /// Compatibility risk for backup/compliance tools that depend on last-access timestamps.
+    pub last_access_compatibility: NtfsMetadataCompatibility,
+    /// Current NTFS 8.3 name-creation state.
+    pub eight_dot_three_state: NtfsEightDotThreeNameState,
+    /// Explicit consent for changing 8.3 name creation.
+    pub eight_dot_three_consent: StorageControlConsent,
+    /// Compatibility risk for legacy installers or applications that depend on 8.3 names.
+    pub eight_dot_three_compatibility: NtfsMetadataCompatibility,
+}
+
+impl NtfsMetadataPlanRequest {
+    /// Creates a conservative NTFS metadata request.
+    #[must_use]
+    pub fn new(plan_id: impl Into<String>) -> Self {
+        Self {
+            plan_id: plan_id.into(),
+            requested_mode: TweakMode::Safe,
+            last_access_state: NtfsLastAccessState::Unknown,
+            last_access_consent: StorageControlConsent::NotGranted,
+            last_access_compatibility: NtfsMetadataCompatibility::Unknown,
+            eight_dot_three_state: NtfsEightDotThreeNameState::Unknown,
+            eight_dot_three_consent: StorageControlConsent::NotGranted,
+            eight_dot_three_compatibility: NtfsMetadataCompatibility::Unknown,
+        }
+    }
+}
+
 /// Builds a dry-run plan for T044 storage readiness checks.
 #[must_use]
 pub fn build_storage_readiness_plan(request: &StorageReadinessPlanRequest) -> TweakPlan {
@@ -424,6 +596,34 @@ pub fn build_storage_readiness_plan(request: &StorageReadinessPlanRequest) -> Tw
     }
 }
 
+/// Builds a dry-run plan for T054 NTFS last-access and 8.3 metadata behavior.
+#[must_use]
+pub fn build_ntfs_metadata_plan(request: &NtfsMetadataPlanRequest) -> TweakPlan {
+    let items = vec![
+        ntfs_last_access_item(request),
+        ntfs_eight_dot_three_item(request),
+    ];
+    let warnings = items
+        .iter()
+        .flat_map(|item| item.warnings.iter())
+        .filter(|warning| {
+            warning.contains("NTFS")
+                || warning.contains("8.3")
+                || warning.contains("backup")
+                || warning.contains("compatibility")
+        })
+        .cloned()
+        .collect();
+
+    TweakPlan {
+        id: request.plan_id.clone(),
+        requested_mode: request.requested_mode,
+        catalog_schema_version: SUPPORTED_CATALOG_SCHEMA_VERSION.to_owned(),
+        items,
+        warnings,
+    }
+}
+
 /// Returns true when the ID belongs to the T044 storage scope.
 #[must_use]
 pub fn is_storage_readiness_tweak_id(tweak_id: &str) -> bool {
@@ -434,6 +634,15 @@ pub fn is_storage_readiness_tweak_id(tweak_id: &str) -> bool {
             | STORAGE_TRIM_VERIFY_TWEAK_ID
             | STORAGE_DIRECTSTORAGE_CHECK_TWEAK_ID
             | STORAGE_NVME_DRIVER_HACK_TWEAK_ID
+    )
+}
+
+/// Returns true when the ID belongs to the T054 NTFS metadata scope.
+#[must_use]
+pub fn is_ntfs_metadata_tweak_id(tweak_id: &str) -> bool {
+    matches!(
+        tweak_id,
+        STORAGE_NTFS_LAST_ACCESS_TWEAK_ID | STORAGE_NTFS_8DOT3_TWEAK_ID
     )
 }
 
@@ -449,6 +658,32 @@ pub fn is_storage_sense_registry_target(target: &str) -> bool {
     )
 }
 
+/// Returns true when the target is an allowlisted fsutil NTFS metadata target.
+#[must_use]
+pub fn is_ntfs_metadata_fsutil_target(target: &str) -> bool {
+    matches!(
+        target,
+        TARGET_NTFS_DISABLE_LAST_ACCESS | TARGET_NTFS_DISABLE_8DOT3
+    )
+}
+
+/// Returns true when NTFS metadata items include compatibility warnings.
+#[must_use]
+pub fn ntfs_metadata_plan_has_compatibility_warnings(plan: &TweakPlan) -> bool {
+    plan.items.iter().all(|item| {
+        if !is_ntfs_metadata_tweak_id(&item.tweak_id) {
+            return true;
+        }
+
+        item.warnings.iter().any(|warning| {
+            warning.contains("compatibility")
+                || warning.contains("backup")
+                || warning.contains("legacy")
+                || warning.contains("compliance")
+        })
+    })
+}
+
 /// Returns true when a plan avoids blind cleanup deletion.
 #[must_use]
 pub fn storage_plan_has_no_blind_deletes(plan: &TweakPlan) -> bool {
@@ -461,6 +696,155 @@ pub fn storage_plan_has_no_blind_deletes(plan: &TweakPlan) -> bool {
                 && change.scope == SessionScope::RecommendationOnly
                 && change.target.starts_with(CLEANUP_TARGET_PREFIX)
         })
+}
+
+fn ntfs_last_access_item(request: &NtfsMetadataPlanRequest) -> TweakPlanItem {
+    let mut warnings = vec![
+        "NTFS last-access changes require compatibility review for backup, audit, and compliance tools."
+            .to_owned(),
+    ];
+    let action = if request.last_access_state.raw_value().is_none() {
+        warnings.push("Current NTFS last-access fsutil state is unknown; rescan before apply.".to_owned());
+        PlanAction::DetectOnly
+    } else if request.last_access_state.is_disabled() {
+        warnings.push("NTFS last-access updates are already disabled.".to_owned());
+        PlanAction::DetectOnly
+    } else if request.last_access_compatibility.has_known_dependency() {
+        warnings.push("Known backup/compliance dependency blocks automatic last-access changes.".to_owned());
+        PlanAction::Recommend
+    } else if request.last_access_consent.is_granted()
+        && request.last_access_compatibility.is_low_risk()
+    {
+        PlanAction::Apply
+    } else {
+        warnings.push(
+            "Disabling last-access updates is prompt-only and needs explicit user consent."
+                .to_owned(),
+        );
+
+        if !request.last_access_compatibility.is_low_risk() {
+            warnings.push("Last-access compatibility is not proven low risk yet.".to_owned());
+        }
+
+        PlanAction::Recommend
+    };
+
+    let state = request.last_access_state.as_state();
+    let changes = if matches!(action, PlanAction::Apply | PlanAction::Recommend)
+        && !request.last_access_compatibility.has_known_dependency()
+    {
+        vec![write_change(
+            TARGET_NTFS_DISABLE_LAST_ACCESS,
+            state,
+            DESIRED_DISABLE_LAST_ACCESS_VALUE,
+        )]
+    } else {
+        vec![read_change(TARGET_NTFS_DISABLE_LAST_ACCESS, &state)]
+    };
+
+    ntfs_plan_item(
+        STORAGE_NTFS_LAST_ACCESS_TWEAK_ID,
+        action,
+        TweakMode::Safe,
+        changes,
+        warnings,
+    )
+}
+
+fn ntfs_eight_dot_three_item(request: &NtfsMetadataPlanRequest) -> TweakPlanItem {
+    let mut warnings = vec![
+        "NTFS 8.3 name creation changes can affect legacy installers and older applications."
+            .to_owned(),
+        "Disable 8.3 name creation only for future files after compatibility review.".to_owned(),
+    ];
+    let action = if request.eight_dot_three_state.raw_value().is_none() {
+        warnings.push("Current NTFS 8.3 fsutil state is unknown; rescan before apply.".to_owned());
+        PlanAction::DetectOnly
+    } else if request.eight_dot_three_state.is_disabled_for_new_files() {
+        warnings.push("NTFS 8.3 name creation is already disabled for future files.".to_owned());
+        PlanAction::DetectOnly
+    } else if request.eight_dot_three_compatibility.has_known_dependency() {
+        warnings.push("Known legacy short-name dependency blocks automatic 8.3 changes.".to_owned());
+        PlanAction::Recommend
+    } else if request.eight_dot_three_consent.is_granted()
+        && request.eight_dot_three_compatibility.is_low_risk()
+    {
+        PlanAction::Apply
+    } else {
+        warnings.push(
+            "Disabling NTFS 8.3 name creation is prompt-only and needs explicit user consent."
+                .to_owned(),
+        );
+
+        if !request.eight_dot_three_compatibility.is_low_risk() {
+            warnings.push("8.3 legacy compatibility is not proven low risk yet.".to_owned());
+        }
+
+        PlanAction::Recommend
+    };
+    let mode = if request.requested_mode == TweakMode::Competitive {
+        TweakMode::Competitive
+    } else {
+        TweakMode::Safe
+    };
+    let state = request.eight_dot_three_state.as_state();
+    let changes = if matches!(action, PlanAction::Apply | PlanAction::Recommend)
+        && !request.eight_dot_three_compatibility.has_known_dependency()
+    {
+        vec![write_change(
+            TARGET_NTFS_DISABLE_8DOT3,
+            state,
+            DESIRED_DISABLE_8DOT3_VALUE,
+        )]
+    } else {
+        vec![read_change(TARGET_NTFS_DISABLE_8DOT3, state)]
+    };
+
+    ntfs_plan_item(
+        STORAGE_NTFS_8DOT3_TWEAK_ID,
+        action,
+        mode,
+        changes,
+        warnings,
+    )
+}
+
+fn ntfs_plan_item(
+    tweak_id: &str,
+    action: PlanAction,
+    mode: TweakMode,
+    changes: Vec<PlannedChange>,
+    warnings: Vec<String>,
+) -> TweakPlanItem {
+    let backup = if action == PlanAction::Apply {
+        BackupRequirement::Required {
+            kind: RollbackKind::ExactValue,
+            target: changes
+                .first()
+                .map_or_else(|| tweak_id.to_owned(), |change| change.target.clone()),
+        }
+    } else {
+        BackupRequirement::NotRequired
+    };
+    let rollback = if action == PlanAction::Apply {
+        exact_value_rollback("Restore previous NTFS fsutil value.", &changes, true)
+    } else {
+        RollbackPlan::not_needed()
+    };
+
+    TweakPlanItem {
+        tweak_id: tweak_id.to_owned(),
+        category: TweakCategory::Storage,
+        action,
+        mode,
+        risk: TweakRisk::Medium,
+        changes,
+        backup,
+        rollback,
+        reboot: RebootPolicy::None,
+        requires_admin: action == PlanAction::Apply,
+        warnings,
+    }
 }
 
 fn cleanup_preview_item(request: &StorageReadinessPlanRequest) -> TweakPlanItem {
@@ -835,6 +1219,85 @@ mod tests {
             .iter()
             .find(|item| item.tweak_id == tweak_id)
             .expect("plan item should exist")
+    }
+
+    #[test]
+    fn ntfs_metadata_is_prompt_only_until_compatibility_and_consent() {
+        let mut request = NtfsMetadataPlanRequest::new("plan-ntfs-prompt");
+        request.last_access_state = NtfsLastAccessState::from_disable_last_access_value(Some(0));
+        request.eight_dot_three_state =
+            NtfsEightDotThreeNameState::from_disable_8dot3_value(Some(0));
+
+        let plan = build_ntfs_metadata_plan(&request);
+        let last_access = item(&plan, STORAGE_NTFS_LAST_ACCESS_TWEAK_ID);
+        let eight_dot_three = item(&plan, STORAGE_NTFS_8DOT3_TWEAK_ID);
+
+        assert_eq!(last_access.action, PlanAction::Recommend);
+        assert_eq!(eight_dot_three.action, PlanAction::Recommend);
+        assert_eq!(last_access.backup, BackupRequirement::NotRequired);
+        assert!(ntfs_metadata_plan_has_compatibility_warnings(&plan));
+        assert!(plan
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("compatibility")));
+    }
+
+    #[test]
+    fn consented_ntfs_metadata_plan_is_backup_and_rollback_capable() {
+        let mut request = NtfsMetadataPlanRequest::new("plan-ntfs-apply");
+        request.last_access_state = NtfsLastAccessState::from_disable_last_access_value(Some(2));
+        request.last_access_consent = StorageControlConsent::Granted;
+        request.last_access_compatibility = NtfsMetadataCompatibility::LowRisk;
+        request.eight_dot_three_state =
+            NtfsEightDotThreeNameState::from_disable_8dot3_value(Some(0));
+        request.eight_dot_three_consent = StorageControlConsent::Granted;
+        request.eight_dot_three_compatibility = NtfsMetadataCompatibility::LowRisk;
+
+        let plan = build_ntfs_metadata_plan(&request);
+        let last_access = item(&plan, STORAGE_NTFS_LAST_ACCESS_TWEAK_ID);
+        let eight_dot_three = item(&plan, STORAGE_NTFS_8DOT3_TWEAK_ID);
+
+        assert_eq!(last_access.action, PlanAction::Apply);
+        assert_eq!(eight_dot_three.action, PlanAction::Apply);
+        assert_eq!(
+            last_access.backup,
+            BackupRequirement::Required {
+                kind: RollbackKind::ExactValue,
+                target: TARGET_NTFS_DISABLE_LAST_ACCESS.to_owned(),
+            }
+        );
+        assert_eq!(last_access.rollback.steps.len(), 1);
+        assert_eq!(eight_dot_three.rollback.steps.len(), 1);
+        assert!(last_access.requires_admin);
+        assert!(eight_dot_three
+            .changes
+            .iter()
+            .all(|change| is_ntfs_metadata_fsutil_target(&change.target)));
+    }
+
+    #[test]
+    fn ntfs_metadata_blocks_known_legacy_dependencies_from_apply() {
+        let mut request = NtfsMetadataPlanRequest::new("plan-ntfs-legacy");
+        request.last_access_state = NtfsLastAccessState::from_disable_last_access_value(Some(0));
+        request.last_access_consent = StorageControlConsent::Granted;
+        request.last_access_compatibility = NtfsMetadataCompatibility::KnownDependency;
+        request.eight_dot_three_state =
+            NtfsEightDotThreeNameState::from_disable_8dot3_value(Some(2));
+        request.eight_dot_three_consent = StorageControlConsent::Granted;
+        request.eight_dot_three_compatibility = NtfsMetadataCompatibility::KnownDependency;
+
+        let plan = build_ntfs_metadata_plan(&request);
+        let last_access = item(&plan, STORAGE_NTFS_LAST_ACCESS_TWEAK_ID);
+        let eight_dot_three = item(&plan, STORAGE_NTFS_8DOT3_TWEAK_ID);
+
+        assert_eq!(last_access.action, PlanAction::Recommend);
+        assert_eq!(eight_dot_three.action, PlanAction::Recommend);
+        assert!(!plan.has_apply_items());
+        assert!(last_access
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("blocks automatic")));
+        assert_eq!(eight_dot_three.changes[0].operation, TweakOperationKind::Read);
     }
 
     #[test]

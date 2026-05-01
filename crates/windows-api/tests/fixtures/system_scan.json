@@ -117,6 +117,11 @@
       "optimizeVolumeAvailable": true,
       "source": "fsutil behavior query DisableDeleteNotify"
     },
+    "ntfsMetadata": {
+      "disableLastAccess": 0,
+      "disable8dot3": 0,
+      "source": "fsutil behavior query DisableLastAccess; fsutil 8dot3name query"
+    },
     "directStorage": {
       "osSupported": true,
       "nvmePresent": true,

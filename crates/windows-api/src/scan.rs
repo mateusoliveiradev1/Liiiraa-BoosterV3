@@ -247,6 +247,34 @@ $trim = Invoke-ScanSection "storage.trim" {
     source = "fsutil behavior query DisableDeleteNotify"
 })
 
+$ntfsMetadata = Invoke-ScanSection "storage.ntfs_metadata" {
+    $lastAccessOutput = (& "$env:SystemRoot\System32\fsutil.exe" behavior query DisableLastAccess) -join "`n"
+    $lastAccess = $null
+    if ($lastAccessOutput -match "DisableLastAccess(?:Update)?\s*=\s*(\d+)") {
+        $lastAccess = [UInt32]$Matches[1]
+    } elseif ($lastAccessOutput -match "DisableLastAccess(?:Update)?.*?:\s*(\d+)") {
+        $lastAccess = [UInt32]$Matches[1]
+    }
+
+    $eightDotThreeOutput = (& "$env:SystemRoot\System32\fsutil.exe" 8dot3name query) -join "`n"
+    $eightDotThree = $null
+    if ($eightDotThreeOutput -match "registry state is:\s*(\d+)") {
+        $eightDotThree = [UInt32]$Matches[1]
+    } elseif ($eightDotThreeOutput -match "Disable8dot3\s*=\s*(\d+)") {
+        $eightDotThree = [UInt32]$Matches[1]
+    }
+
+    [ordered]@{
+        disableLastAccess = $lastAccess
+        disable8dot3 = $eightDotThree
+        source = "fsutil behavior query DisableLastAccess; fsutil 8dot3name query"
+    }
+} ([ordered]@{
+    disableLastAccess = $null
+    disable8dot3 = $null
+    source = "fsutil behavior query DisableLastAccess; fsutil 8dot3name query"
+})
+
 $directStorage = Invoke-ScanSection "storage.direct_storage" {
     $buildNumber = 0
     $buildParsed = [Int32]::TryParse([string]$os.buildNumber, [ref]$buildNumber)
@@ -614,6 +642,7 @@ $rebootRequired = [ordered]@{
         cleanup = $storageCleanup
         storageSense = $storageSense
         trim = $trim
+        ntfsMetadata = $ntfsMetadata
         directStorage = $directStorage
     }
     networkAdapters = $networkAdapters
@@ -838,6 +867,9 @@ pub struct StorageScan {
     /// TRIM and Optimize-Volume state.
     #[serde(default)]
     pub trim: StorageTrimScan,
+    /// NTFS last-access and 8.3 metadata behavior.
+    #[serde(default)]
+    pub ntfs_metadata: NtfsMetadataScan,
     /// DirectStorage readiness state.
     #[serde(default)]
     pub direct_storage: DirectStorageScan,
@@ -931,6 +963,18 @@ pub struct StorageTrimScan {
     pub refs_disable_delete_notify: Option<u32>,
     /// Whether Optimize-Volume is available.
     pub optimize_volume_available: bool,
+    /// Read-only source used for the scan.
+    pub source: String,
+}
+
+/// NTFS metadata behavior state.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NtfsMetadataScan {
+    /// NTFS DisableLastAccess value.
+    pub disable_last_access: Option<u32>,
+    /// NTFS Disable8dot3 registry value.
+    pub disable_8dot3: Option<u32>,
     /// Read-only source used for the scan.
     pub source: String,
 }

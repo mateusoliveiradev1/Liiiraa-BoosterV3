@@ -21,6 +21,8 @@ fn fixture_covers_t040_inventory_sections() {
             && feature.install_state == Some(1)));
     assert_eq!(report.storage.storage_sense.enabled, Some(false));
     assert_eq!(report.storage.trim.ntfs_disable_delete_notify, Some(0));
+    assert_eq!(report.storage.ntfs_metadata.disable_last_access, Some(0));
+    assert_eq!(report.storage.ntfs_metadata.disable_8dot3, Some(0));
     assert_eq!(report.storage.direct_storage.nvme_present, Some(true));
     assert_eq!(report.graphics.hags.value, Some(1));
     assert_eq!(report.graphics.windowed_optimizations.supported, Some(true));
