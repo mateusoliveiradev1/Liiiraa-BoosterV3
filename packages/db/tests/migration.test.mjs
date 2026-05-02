@@ -20,6 +20,7 @@ describe("Neon database migrations", () => {
     assert.equal(result.tables.includes("benchmark_sessions"), true);
     assert.equal(result.tables.includes("audit_events"), true);
     assert.equal(result.tables.includes("feature_flags"), true);
+    assert.deepEqual(result.releaseChannels, ["dev", "beta", "stable"]);
   });
 });
 

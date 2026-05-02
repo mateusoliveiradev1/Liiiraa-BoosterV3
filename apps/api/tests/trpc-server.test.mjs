@@ -52,6 +52,32 @@ describe("Fastify tRPC API scaffold", () => {
     assert.equal(benchmark.accepted, true);
     assert.equal(benchmark.statusCode, 202);
 
+    const channels = await caller.query("releases.channels", {});
+    assert.deepEqual(
+      channels.channels.map((channel) => channel.id),
+      ["dev", "beta", "stable"]
+    );
+    assert.equal(channels.defaultChannel, "stable");
+
+    const stableRelease = await caller.query("releases.latest", {
+      channel: "stable",
+      clientVersion: "0.0.0"
+    });
+    const betaRelease = await caller.query("releases.latest", { channel: "beta" });
+    assert.equal(stableRelease.channel, "stable");
+    assert.equal(stableRelease.version, "0.1.0");
+    assert.equal(stableRelease.updateAvailable, true);
+    assert.equal(betaRelease.channel, "beta");
+    assert.notEqual(betaRelease.version, stableRelease.version);
+
+    const flags = await caller.query("featureflags.evaluate", {
+      channel: "beta",
+      flagKeys: ["release.diagnostics", "optimizer.labTweaks"]
+    });
+    assert.equal(flags.channel, "beta");
+    assert.equal(flags.evaluations[0].enabled, true);
+    assert.equal(flags.evaluations[0].source, "channel");
+
     await assert.rejects(
       () => caller.query("benchmarks.sync", benchmarkSyncPayload()),
       ContractValidationError

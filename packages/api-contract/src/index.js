@@ -1,11 +1,16 @@
 export const API_SECURITY_CONTRACT_VERSION = "0.1.0";
-export const API_TRPC_CONTRACT_VERSION = "0.1.0";
+export const API_TRPC_CONTRACT_VERSION = "0.2.0";
 export const API_TRPC_PATH = "/trpc";
+export const RELEASE_CHANNELS = deepFreeze(["dev", "beta", "stable"]);
+export const RELEASE_PLATFORMS = deepFreeze(["windows-x64"]);
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const PROCEDURE_NAME_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/;
+const emptyInputSchema = objectSchema({});
+const releaseChannelSchema = enumSchema(RELEASE_CHANNELS);
+const releasePlatformSchema = enumSchema(RELEASE_PLATFORMS);
 const catalogLatestInputSchema = objectSchema({
-  channel: optionalEnumSchema(["dev", "beta", "stable"]),
+  channel: optionalEnumSchema(RELEASE_CHANNELS),
   clientVersion: optionalStringSchema({ maxLength: 64 })
 });
 const catalogPayloadSchema = plainObjectSchema();
@@ -24,13 +29,44 @@ const catalogSignatureSchema = objectSchema({
 });
 const catalogLatestOutputSchema = objectSchema({
   catalogVersion: requiredStringSchema({ maxLength: 96 }),
-  channel: enumSchema(["dev", "beta", "stable"]),
+  channel: releaseChannelSchema,
   integrity: requiredStringSchema({ maxLength: 96 }),
   minimumAppVersion: optionalStringSchema({ maxLength: 64 }),
   payload: catalogPayloadSchema,
   publishedAtUtc: requiredStringSchema({ maxLength: 40 }),
   schemaVersion: requiredStringSchema({ maxLength: 16 }),
   signature: catalogSignatureSchema
+});
+const releaseChannelInfoSchema = objectSchema({
+  description: requiredStringSchema({ maxLength: 240 }),
+  id: releaseChannelSchema,
+  requiresSignedArtifacts: booleanSchema(),
+  riskyChangesFirst: booleanSchema(),
+  title: requiredStringSchema({ maxLength: 64 })
+});
+const releaseChannelsOutputSchema = objectSchema({
+  channels: arraySchema(releaseChannelInfoSchema, { maxLength: 3, minLength: 3 }),
+  defaultChannel: releaseChannelSchema,
+  version: requiredStringSchema({ maxLength: 32 })
+});
+const releaseLatestInputSchema = objectSchema({
+  channel: optionalEnumSchema(RELEASE_CHANNELS),
+  clientVersion: optionalStringSchema({ maxLength: 64 }),
+  platform: optionalEnumSchema(RELEASE_PLATFORMS)
+});
+const releaseLatestOutputSchema = objectSchema({
+  artifactSha256: requiredStringSchema({ maxLength: 64 }),
+  artifactUrl: requiredStringSchema({ maxLength: 512 }),
+  channel: releaseChannelSchema,
+  isCritical: booleanSchema(),
+  minimumAppVersion: optionalStringSchema({ maxLength: 64 }),
+  platform: releasePlatformSchema,
+  publishedAtUtc: requiredStringSchema({ maxLength: 40 }),
+  releaseNotesUrl: requiredStringSchema({ maxLength: 512 }),
+  rolloutPercent: integerSchema({ max: 100, min: 0 }),
+  signature: requiredStringSchema({ maxLength: 512 }),
+  updateAvailable: booleanSchema(),
+  version: requiredStringSchema({ maxLength: 64 })
 });
 const systemHealthInputSchema = objectSchema({
   includeBuild: optionalBooleanSchema()
@@ -84,6 +120,25 @@ const benchmarkSyncInputSchema = objectSchema({
   consent: benchmarkSyncConsentSchema,
   session: benchmarkSyncSessionSchema
 });
+const featureFlagsEvaluateInputSchema = objectSchema({
+  channel: optionalEnumSchema(RELEASE_CHANNELS),
+  deviceId: optionalStringSchema({ maxLength: 128 }),
+  flagKeys: arraySchema(requiredStringSchema({ maxLength: 128 }), { maxLength: 64, minLength: 1 }),
+  userId: optionalStringSchema({ maxLength: 128 })
+});
+const featureFlagEvaluationSchema = objectSchema({
+  enabled: booleanSchema(),
+  key: requiredStringSchema({ maxLength: 128 }),
+  reason: requiredStringSchema({ maxLength: 160 }),
+  rolloutPercent: integerSchema({ max: 100, min: 0 }),
+  source: enumSchema(["default", "channel", "device", "user"]),
+  variant: optionalStringSchema({ maxLength: 96 })
+});
+const featureFlagsEvaluateOutputSchema = objectSchema({
+  channel: releaseChannelSchema,
+  evaluations: arraySchema(featureFlagEvaluationSchema, { maxLength: 64, minLength: 1 }),
+  version: requiredStringSchema({ maxLength: 32 })
+});
 
 export class ContractValidationError extends Error {
   constructor(message, issues = []) {
@@ -121,6 +176,45 @@ export const publicProcedureSecurityPolicies = deepFreeze({
       windowMs: 60_000
     }
   },
+  "featureflags.evaluate": {
+    errorRedaction: "public",
+    inputSchema: featureFlagsEvaluateInputSchema,
+    logging: {
+      audit: true,
+      fields: ["requestId", "procedure", "origin", "statusCode", "durationMs", "remoteAddressHash"]
+    },
+    rateLimit: {
+      key: "ip",
+      max: 30,
+      windowMs: 60_000
+    }
+  },
+  "releases.channels": {
+    errorRedaction: "public",
+    inputSchema: emptyInputSchema,
+    logging: {
+      audit: false,
+      fields: ["requestId", "procedure", "origin", "statusCode"]
+    },
+    rateLimit: {
+      key: "ip",
+      max: 60,
+      windowMs: 60_000
+    }
+  },
+  "releases.latest": {
+    errorRedaction: "public",
+    inputSchema: releaseLatestInputSchema,
+    logging: {
+      audit: true,
+      fields: ["requestId", "procedure", "origin", "statusCode", "durationMs", "remoteAddressHash"]
+    },
+    rateLimit: {
+      key: "ip",
+      max: 30,
+      windowMs: 60_000
+    }
+  },
   "system.health": {
     errorRedaction: "public",
     inputSchema: systemHealthInputSchema,
@@ -142,6 +236,30 @@ export const apiProcedureContracts = deepFreeze({
     inputSchema: catalogLatestInputSchema,
     kind: "query",
     outputSchema: catalogLatestOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "public"
+  },
+  "featureflags.evaluate": {
+    description: "Evaluate public feature flags for a release channel without exposing rule internals.",
+    inputSchema: featureFlagsEvaluateInputSchema,
+    kind: "query",
+    outputSchema: featureFlagsEvaluateOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "public"
+  },
+  "releases.channels": {
+    description: "List supported app release channels and their rollout policy.",
+    inputSchema: emptyInputSchema,
+    kind: "query",
+    outputSchema: releaseChannelsOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "public"
+  },
+  "releases.latest": {
+    description: "Read latest signed app release metadata for a dev, beta, or stable channel.",
+    inputSchema: releaseLatestInputSchema,
+    kind: "query",
+    outputSchema: releaseLatestOutputSchema,
     path: API_TRPC_PATH,
     visibility: "public"
   },
@@ -485,6 +603,11 @@ export function numberSchema(options = {}) {
         return undefined;
       }
 
+      if (options.max !== undefined && value > options.max) {
+        issues.push(issue(path, "invalid_range", `<= ${options.max}`));
+        return undefined;
+      }
+
       return value;
     }
   };
@@ -500,6 +623,11 @@ export function integerSchema(options = {}) {
 
       if (options.min !== undefined && value < options.min) {
         issues.push(issue(path, "invalid_range", `>= ${options.min}`));
+        return undefined;
+      }
+
+      if (options.max !== undefined && value > options.max) {
+        issues.push(issue(path, "invalid_range", `<= ${options.max}`));
         return undefined;
       }
 

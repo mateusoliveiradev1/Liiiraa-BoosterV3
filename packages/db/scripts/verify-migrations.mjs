@@ -70,12 +70,25 @@ export function verifyMigrations() {
   assert(sql.includes("REFERENCES auth_users(id)"), "optimizer data must be linkable to future auth users");
   assert(sql.includes("payload_sha256 varchar(64) NOT NULL"), "tweak catalogs must carry integrity metadata");
   assert(sql.includes("signature text NOT NULL"), "tweak catalogs must carry signature metadata");
+  assert(
+    sql.includes("CREATE TYPE release_channel AS ENUM ('dev', 'beta', 'stable')"),
+    "release channel enum must contain dev, beta, and stable only"
+  );
+  assert(
+    sql.includes("ix_app_releases_channel_published"),
+    "release metadata must be queryable by channel and publication time"
+  );
   assert(sql.includes("ck_feature_flags_rollout_percent"), "feature flag rollout bounds are required");
+  assert(
+    sql.includes("ix_feature_flag_overrides_channel"),
+    "feature flags must support channel-specific overrides"
+  );
   assert(sql.includes("ck_app_releases_rollout_percent"), "release rollout bounds are required");
   assert(sql.includes("remote_address_hash"), "audit events must store hashed remote address only");
   assert(sql.includes("user_agent_hash"), "audit events must store hashed user agent only");
 
   return {
+    releaseChannels: ["dev", "beta", "stable"],
     migrations: migrationFiles,
     tables: requiredTables
   };

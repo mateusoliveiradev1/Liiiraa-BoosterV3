@@ -9,6 +9,11 @@ import {
 } from "../../../packages/api-contract/src/index.js";
 import { createBenchmarkSessionSyncDecision } from "./benchmark-sync.js";
 import { createCatalogDeliveryResponse } from "./catalog-delivery.js";
+import { createFeatureFlagEvaluationResponse } from "./feature-flags.js";
+import {
+  createLatestReleaseResponse,
+  createReleaseChannelsResponse
+} from "./release-channels.js";
 import { createApiSecurityBaseline } from "./security-baseline.js";
 
 const DEFAULT_REQUEST_ID = "req_local0000";
@@ -24,6 +29,9 @@ export function createApiProcedureHandlers(options = {}) {
 
   return {
     "catalog.latest": async ({ input }) => createCatalogDeliveryResponse(input, options),
+    "featureflags.evaluate": async ({ input }) => createFeatureFlagEvaluationResponse(input, options),
+    "releases.channels": async () => createReleaseChannelsResponse(options),
+    "releases.latest": async ({ input }) => createLatestReleaseResponse(input, options),
     "benchmarks.sync": async ({ envelope }) => {
       const decision = createBenchmarkSessionSyncDecision(envelope);
 
@@ -179,6 +187,19 @@ export async function createNativeTrpcApiRouter(options = {}) {
       latest: t.procedure
         .input(createTrpcInputParser("catalog.latest", options.contracts))
         .query(({ ctx, input }) => router.call("catalog.latest", input, normalizeTrpcContext(ctx)))
+    }),
+    featureflags: t.router({
+      evaluate: t.procedure
+        .input(createTrpcInputParser("featureflags.evaluate", options.contracts))
+        .query(({ ctx, input }) => router.call("featureflags.evaluate", input, normalizeTrpcContext(ctx)))
+    }),
+    releases: t.router({
+      channels: t.procedure
+        .input(createTrpcInputParser("releases.channels", options.contracts))
+        .query(({ ctx, input }) => router.call("releases.channels", input, normalizeTrpcContext(ctx))),
+      latest: t.procedure
+        .input(createTrpcInputParser("releases.latest", options.contracts))
+        .query(({ ctx, input }) => router.call("releases.latest", input, normalizeTrpcContext(ctx)))
     }),
     system: t.router({
       health: t.procedure

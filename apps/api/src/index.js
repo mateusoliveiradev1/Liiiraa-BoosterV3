@@ -37,6 +37,20 @@ export {
   createCatalogDeliveryResponse
 } from "./catalog-delivery.js";
 export {
+  API_FEATURE_FLAGS_VERSION,
+  DEFAULT_FEATURE_FLAGS,
+  createFeatureFlagEvaluationResponse,
+  evaluateFeatureFlag
+} from "./feature-flags.js";
+export {
+  API_RELEASE_CHANNELS_VERSION,
+  DEFAULT_APP_RELEASES,
+  createLatestReleaseResponse,
+  createReleaseChannelsResponse,
+  releaseChannelDefinitions,
+  selectLatestReleaseForChannel
+} from "./release-channels.js";
+export {
   createApiProcedureHandlers,
   createTrpcApiRouter,
   createNativeTrpcApiRouter,

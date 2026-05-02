@@ -19,6 +19,8 @@
     ".": "./src/index.js",
     "./benchmark-sync": "./src/benchmark-sync.js",
     "./config": "./src/config.js",
+    "./feature-flags": "./src/feature-flags.js",
+    "./release-channels": "./src/release-channels.js",
     "./server": "./src/server.js",
     "./security-baseline": "./src/security-baseline.js",
     "./trpc-router": "./src/trpc-router.js"

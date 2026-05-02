@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   API_TRPC_PATH,
   ContractValidationError,
+  RELEASE_CHANNELS,
+  RELEASE_PLATFORMS,
   assertProcedureSecurityCoverage,
   assertTypedApiContractCoverage,
   apiProcedureContracts,
@@ -72,6 +74,9 @@ describe("API contract security policies", () => {
     assert.deepEqual(listPublicApiProcedures(), [
       "benchmarks.sync",
       "catalog.latest",
+      "featureflags.evaluate",
+      "releases.channels",
+      "releases.latest",
       "system.health"
     ]);
 
@@ -187,6 +192,87 @@ describe("API contract security policies", () => {
           },
           procedure: "catalog.latest",
           requestId: "req_12345678"
+        }),
+      ContractValidationError
+    );
+  });
+
+  it("declares dev beta stable release channel contracts", () => {
+    assert.deepEqual(RELEASE_CHANNELS, ["dev", "beta", "stable"]);
+    assert.deepEqual(RELEASE_PLATFORMS, ["windows-x64"]);
+
+    assert.deepEqual(validateApiContractInput("releases.latest", { channel: "beta", platform: "windows-x64" }), {
+      channel: "beta",
+      platform: "windows-x64"
+    });
+    assert.deepEqual(
+      validateApiContractOutput("releases.channels", {
+        channels: [
+          {
+            description: "Internal builds.",
+            id: "dev",
+            requiresSignedArtifacts: false,
+            riskyChangesFirst: true,
+            title: "Dev"
+          },
+          {
+            description: "Signed soak builds.",
+            id: "beta",
+            requiresSignedArtifacts: true,
+            riskyChangesFirst: true,
+            title: "Beta"
+          },
+          {
+            description: "Public signed builds.",
+            id: "stable",
+            requiresSignedArtifacts: true,
+            riskyChangesFirst: false,
+            title: "Stable"
+          }
+        ],
+        defaultChannel: "stable",
+        version: "0.1.0"
+      }).channels.map((channel) => channel.id),
+      ["dev", "beta", "stable"]
+    );
+  });
+
+  it("validates public feature flag evaluation contracts", () => {
+    const input = validateApiContractInput("featureflags.evaluate", {
+      channel: "stable",
+      deviceId: "device:abc123",
+      flagKeys: ["optimizer.labTweaks"]
+    });
+
+    assert.deepEqual(input, {
+      channel: "stable",
+      deviceId: "device:abc123",
+      flagKeys: ["optimizer.labTweaks"]
+    });
+
+    assert.deepEqual(
+      validateApiContractOutput("featureflags.evaluate", {
+        channel: "stable",
+        evaluations: [
+          {
+            enabled: false,
+            key: "optimizer.labTweaks",
+            reason: "Stable keeps Lab tweak surfaces disabled until explicit approval.",
+            rolloutPercent: 0,
+            source: "default",
+            variant: "off"
+          }
+        ],
+        version: "0.1.0"
+      }).evaluations[0].source,
+      "default"
+    );
+
+    assert.throws(
+      () =>
+        validateApiContractInput("featureflags.evaluate", {
+          channel: "stable",
+          flagKeys: []
         }),
       ContractValidationError
     );
