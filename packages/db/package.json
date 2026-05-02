@@ -1,0 +1,33 @@
+{
+  "name": "@liiiraa/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/verify-migrations.mjs",
+    "check": "node --test tests/*.test.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "lint": "node scripts/verify-migrations.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "node scripts/verify-migrations.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./connection": "./src/connection.js",
+    "./relations": "./src/relations.js",
+    "./schema": "./src/schema.js"
+  },
+  "files": [
+    "drizzle",
+    "src"
+  ]
+}
