@@ -11,6 +11,9 @@ use std::{
 /// Default variance band used when a benchmark comparison has no stronger sample model yet.
 pub const DEFAULT_BENCHMARK_VARIANCE_PERCENT: f64 = 3.0;
 
+/// Minimum measured frames before a comparison should be treated as more than a smoke sample.
+pub const MIN_CONFIDENT_FRAME_COUNT: usize = 600;
+
 /// Default capture duration for guided before/after benchmark sessions.
 pub const DEFAULT_CAPTURE_DURATION: Duration = Duration::from_secs(120);
 
@@ -456,7 +459,7 @@ impl BenchmarkFrameMetrics {
     /// Converts aggregate metrics into the comparison summary shape.
     #[must_use]
     pub fn to_run_summary(&self, label: impl Into<String>) -> BenchmarkRunSummary {
-        BenchmarkRunSummary::new(
+        let summary = BenchmarkRunSummary::new(
             label,
             self.average_fps,
             self.one_percent_low_fps,
@@ -464,6 +467,15 @@ impl BenchmarkFrameMetrics {
             self.p95_frame_time_ms,
             self.dropped_frames.saturating_add(self.delayed_frames),
         )
+        .with_measured_frame_count(self.measured_frame_count);
+
+        if self.has_generated_or_interpolated_frames() {
+            return summary.with_stability_warning(
+                "Generated or interpolated frames detected; compare native-frame metrics with disclosure.",
+            );
+        }
+
+        summary
     }
 }
 
@@ -624,6 +636,8 @@ pub struct BenchmarkRunSummary {
     pub p95_frame_ms: f64,
     /// Dropped or delayed frame count where capture tooling exposes it.
     pub dropped_frames: u32,
+    /// Number of measured frames used for this summary when available.
+    pub measured_frame_count: Option<usize>,
     /// Stability notes that should prevent overconfident recommendations.
     pub stability_warnings: Vec<String>,
 }
@@ -646,8 +660,16 @@ impl BenchmarkRunSummary {
             point_one_percent_low_fps,
             p95_frame_ms,
             dropped_frames,
+            measured_frame_count: None,
             stability_warnings: Vec::new(),
         }
+    }
+
+    /// Adds the number of measured frame samples used to produce this summary.
+    #[must_use]
+    pub const fn with_measured_frame_count(mut self, measured_frame_count: usize) -> Self {
+        self.measured_frame_count = Some(measured_frame_count);
+        self
     }
 
     /// Adds one stability warning to the run summary.
@@ -675,6 +697,39 @@ pub enum BenchmarkDecision {
     Inconclusive,
 }
 
+/// Confidence level for a before/after benchmark recommendation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BenchmarkConfidence {
+    /// Deltas clear the configured variance band with no score warnings.
+    High,
+    /// Direction is useful but at least one secondary signal deserves caution.
+    Medium,
+    /// Result is inside variance, under-sampled, or blocked by stability warnings.
+    Low,
+}
+
+/// Warning category attached to a benchmark score.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BenchmarkScoreWarningKind {
+    /// One or more deltas are inside or too near the configured variance band.
+    Variance,
+    /// A run carried explicit stability warnings.
+    Stability,
+    /// The after run dropped or delayed more frames than the before run.
+    DroppedFrames,
+    /// One of the compared runs did not contain enough measured frames for confidence.
+    SampleSize,
+}
+
+/// User-facing warning attached to a benchmark score.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BenchmarkScoreWarning {
+    /// Warning category.
+    pub kind: BenchmarkScoreWarningKind,
+    /// Human-readable warning summary.
+    pub message: String,
+}
+
 /// Delta summary for two benchmark runs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BenchmarkComparisonSummary {
@@ -692,6 +747,19 @@ pub struct BenchmarkComparisonSummary {
     pub decision: BenchmarkDecision,
     /// Variance band applied to this comparison.
     pub variance_percent: f64,
+}
+
+/// Scored before/after benchmark result with confidence and honesty warnings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BenchmarkBeforeAfterScore {
+    /// Raw comparison deltas and decision.
+    pub comparison: BenchmarkComparisonSummary,
+    /// Weighted 0-100 stability-oriented score for the after run.
+    pub score: f64,
+    /// Confidence assigned after variance, stability, and sample checks.
+    pub confidence: BenchmarkConfidence,
+    /// Warnings that should be displayed beside the score.
+    pub warnings: Vec<BenchmarkScoreWarning>,
 }
 
 /// Compares a baseline and candidate benchmark run with a variance band.
@@ -745,12 +813,161 @@ pub fn compare_benchmark_runs(
     }
 }
 
+/// Scores a before/after benchmark pair and attaches confidence/variance warnings.
+#[must_use]
+pub fn score_before_after_runs(
+    before: &BenchmarkRunSummary,
+    after: &BenchmarkRunSummary,
+    variance_percent: f64,
+) -> BenchmarkBeforeAfterScore {
+    let comparison = compare_benchmark_runs(before, after, variance_percent);
+    let warnings = score_warnings(before, after, &comparison);
+    let score = weighted_stability_score(&comparison, after);
+    let confidence = score_confidence(&comparison, &warnings);
+
+    BenchmarkBeforeAfterScore {
+        comparison,
+        score,
+        confidence,
+        warnings,
+    }
+}
+
 fn percent_delta(baseline: f64, candidate: f64) -> f64 {
     if baseline.abs() < f64::EPSILON {
         return 0.0;
     }
 
     ((candidate - baseline) / baseline) * 100.0
+}
+
+fn score_warnings(
+    before: &BenchmarkRunSummary,
+    after: &BenchmarkRunSummary,
+    comparison: &BenchmarkComparisonSummary,
+) -> Vec<BenchmarkScoreWarning> {
+    let mut warnings = Vec::new();
+    let variance_percent = comparison.variance_percent;
+
+    if comparison.decision == BenchmarkDecision::Inconclusive {
+        warnings.push(BenchmarkScoreWarning {
+            kind: BenchmarkScoreWarningKind::Variance,
+            message: format!(
+                "Before/after deltas are inside the configured +/-{variance_percent:.1}% variance band."
+            ),
+        });
+    } else {
+        let near_variance_metrics = near_variance_metrics(comparison);
+        if !near_variance_metrics.is_empty() {
+            warnings.push(BenchmarkScoreWarning {
+                kind: BenchmarkScoreWarningKind::Variance,
+                message: format!(
+                    "Some secondary deltas remain inside +/-{variance_percent:.1}% variance: {}.",
+                    near_variance_metrics.join(", ")
+                ),
+            });
+        }
+    }
+
+    if before.has_stability_warnings() {
+        warnings.push(BenchmarkScoreWarning {
+            kind: BenchmarkScoreWarningKind::Stability,
+            message: format!("Before run warning: {}.", before.stability_warnings.join("; ")),
+        });
+    }
+
+    if after.has_stability_warnings() {
+        warnings.push(BenchmarkScoreWarning {
+            kind: BenchmarkScoreWarningKind::Stability,
+            message: format!("After run warning: {}.", after.stability_warnings.join("; ")),
+        });
+    }
+
+    if comparison.dropped_frame_delta > 0 {
+        warnings.push(BenchmarkScoreWarning {
+            kind: BenchmarkScoreWarningKind::DroppedFrames,
+            message: format!(
+                "After run reported {} more dropped or delayed frame(s).",
+                comparison.dropped_frame_delta
+            ),
+        });
+    }
+
+    for (label, frame_count) in [
+        ("Before", before.measured_frame_count),
+        ("After", after.measured_frame_count),
+    ] {
+        if let Some(frame_count) = frame_count {
+            if frame_count < MIN_CONFIDENT_FRAME_COUNT {
+                warnings.push(BenchmarkScoreWarning {
+                    kind: BenchmarkScoreWarningKind::SampleSize,
+                    message: format!(
+                        "{label} run has {frame_count} measured frames; confidence target is {MIN_CONFIDENT_FRAME_COUNT}+."
+                    ),
+                });
+            }
+        }
+    }
+
+    warnings
+}
+
+fn near_variance_metrics(comparison: &BenchmarkComparisonSummary) -> Vec<&'static str> {
+    let variance_percent = comparison.variance_percent;
+    [
+        ("average FPS", comparison.average_fps_delta_percent),
+        ("1% low", comparison.one_percent_low_delta_percent),
+        ("0.1% low", comparison.point_one_percent_low_delta_percent),
+        ("p95 frametime", comparison.p95_frame_time_delta_percent),
+    ]
+    .into_iter()
+    .filter_map(|(label, delta)| (delta.abs() <= variance_percent).then_some(label))
+    .collect()
+}
+
+fn weighted_stability_score(
+    comparison: &BenchmarkComparisonSummary,
+    after: &BenchmarkRunSummary,
+) -> f64 {
+    let stability_delta = comparison.one_percent_low_delta_percent.mul_add(
+        0.45,
+        comparison.point_one_percent_low_delta_percent.mul_add(
+            0.25,
+            (-comparison.p95_frame_time_delta_percent).mul_add(
+                0.20,
+                comparison.average_fps_delta_percent * 0.10,
+            ),
+        ),
+    );
+    let dropped_frame_penalty = (comparison.dropped_frame_delta.max(0) as f64) * 1.5;
+    let stability_warning_penalty = if after.has_stability_warnings() { 15.0 } else { 0.0 };
+
+    (50.0 + stability_delta - dropped_frame_penalty - stability_warning_penalty).clamp(0.0, 100.0)
+}
+
+fn score_confidence(
+    comparison: &BenchmarkComparisonSummary,
+    warnings: &[BenchmarkScoreWarning],
+) -> BenchmarkConfidence {
+    let has_low_confidence_warning = warnings.iter().any(|warning| {
+        matches!(
+            warning.kind,
+            BenchmarkScoreWarningKind::SampleSize | BenchmarkScoreWarningKind::Stability
+        )
+    });
+
+    if comparison.decision == BenchmarkDecision::Inconclusive || has_low_confidence_warning {
+        return BenchmarkConfidence::Low;
+    }
+
+    if warnings.is_empty()
+        && comparison.one_percent_low_delta_percent.abs() >= comparison.variance_percent * 2.0
+        && comparison.point_one_percent_low_delta_percent.abs() >= comparison.variance_percent
+    {
+        BenchmarkConfidence::High
+    } else {
+        BenchmarkConfidence::Medium
+    }
 }
 
 fn calculate_capture_metrics(
@@ -1386,6 +1603,62 @@ mod tests {
     }
 
     #[test]
+    fn scores_strong_after_run_with_high_confidence() {
+        let before =
+            BenchmarkRunSummary::new("Before", 176.0, 127.0, 92.0, 10.2, 4)
+                .with_measured_frame_count(8_000);
+        let after = BenchmarkRunSummary::new("After", 190.0, 150.0, 102.0, 8.5, 1)
+            .with_measured_frame_count(8_200);
+
+        let score = score_before_after_runs(&before, &after, DEFAULT_BENCHMARK_VARIANCE_PERCENT);
+
+        assert_eq!(score.comparison.decision, BenchmarkDecision::PreferCandidate);
+        assert_eq!(score.confidence, BenchmarkConfidence::High);
+        assert!(score.score > 50.0);
+        assert!(score.warnings.is_empty());
+    }
+
+    #[test]
+    fn warns_when_after_run_is_inside_variance_band() {
+        let before =
+            BenchmarkRunSummary::new("Before", 176.0, 127.0, 92.0, 10.2, 4)
+                .with_measured_frame_count(8_000);
+        let after = BenchmarkRunSummary::new("After", 177.0, 129.0, 93.0, 10.1, 4)
+            .with_measured_frame_count(8_100);
+
+        let score = score_before_after_runs(&before, &after, DEFAULT_BENCHMARK_VARIANCE_PERCENT);
+
+        assert_eq!(score.comparison.decision, BenchmarkDecision::Inconclusive);
+        assert_eq!(score.confidence, BenchmarkConfidence::Low);
+        assert!(has_warning_kind(
+            &score.warnings,
+            BenchmarkScoreWarningKind::Variance
+        ));
+    }
+
+    #[test]
+    fn lowers_confidence_for_sample_and_stability_warnings() {
+        let before =
+            BenchmarkRunSummary::new("Before", 176.0, 127.0, 92.0, 10.2, 4)
+                .with_measured_frame_count(500);
+        let after = BenchmarkRunSummary::new("After", 190.0, 150.0, 102.0, 8.5, 1)
+            .with_measured_frame_count(480)
+            .with_stability_warning("Capture route changed");
+
+        let score = score_before_after_runs(&before, &after, DEFAULT_BENCHMARK_VARIANCE_PERCENT);
+
+        assert_eq!(score.confidence, BenchmarkConfidence::Low);
+        assert!(has_warning_kind(
+            &score.warnings,
+            BenchmarkScoreWarningKind::SampleSize
+        ));
+        assert!(has_warning_kind(
+            &score.warnings,
+            BenchmarkScoreWarningKind::Stability
+        ));
+    }
+
+    #[test]
     fn keeps_baseline_when_candidate_adds_stability_warning() {
         let baseline = BenchmarkRunSummary::new("DX11", 176.0, 127.0, 92.0, 10.2, 4);
         let candidate = BenchmarkRunSummary::new("DX11 Enhanced", 181.0, 139.0, 99.0, 9.5, 2)
@@ -1413,5 +1686,9 @@ mod tests {
             (actual - expected).abs() < 0.0001,
             "expected {actual} to be close to {expected}"
         );
+    }
+
+    fn has_warning_kind(warnings: &[BenchmarkScoreWarning], kind: BenchmarkScoreWarningKind) -> bool {
+        warnings.iter().any(|warning| warning.kind == kind)
     }
 }

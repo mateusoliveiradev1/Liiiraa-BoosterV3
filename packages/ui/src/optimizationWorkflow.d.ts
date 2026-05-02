@@ -162,6 +162,15 @@ export interface OptimizationWorkflowBenchmarkPoint {
   tone: OptimizationWorkflowTone;
 }
 
+export interface OptimizationWorkflowBenchmarkSummary {
+  score: string;
+  confidence: string;
+  decision: string;
+  varianceBand: string;
+  detail: string;
+  warnings: OptimizationWorkflowSignal[];
+}
+
 export interface OptimizationWorkflowGaming {
   power: {
     metrics: OptimizationWorkflowMetric[];
@@ -187,6 +196,7 @@ export interface OptimizationWorkflowGaming {
   benchmarks: {
     metrics: OptimizationWorkflowMetric[];
     actions: OptimizationWorkflowAction[];
+    summary: OptimizationWorkflowBenchmarkSummary;
     chart: OptimizationWorkflowBenchmarkPoint[];
     metadata: Array<[string, string]>;
     sessions: OptimizationWorkflowSignal[];

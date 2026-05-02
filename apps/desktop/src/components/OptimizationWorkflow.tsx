@@ -172,6 +172,15 @@ type BenchmarkPoint = {
   tone: WorkflowTone;
 };
 
+type BenchmarkSummary = {
+  score: string;
+  confidence: string;
+  decision: string;
+  varianceBand: string;
+  detail: string;
+  warnings: ReadinessSignal[];
+};
+
 type DashboardData = {
   readinessScore: number;
   activeMode: string;
@@ -235,6 +244,7 @@ type PubgData = {
 type BenchmarkData = {
   metrics: DashboardMetric[];
   actions: PlanAction[];
+  summary: BenchmarkSummary;
   chart: BenchmarkPoint[];
   metadata: Array<[string, string]>;
   sessions: ReadinessSignal[];
@@ -528,6 +538,16 @@ export function BenchmarkWorkflowView({ data }: BenchmarkViewProps) {
         actions={<PlanActionBar actions={data.actions} />}
       />
       <MetricGrid metrics={data.metrics} />
+      <Surface title="Comparison score" eyebrow={data.summary.detail} badge={data.summary.confidence}>
+        <DefinitionGrid
+          items={[
+            ["Score", data.summary.score],
+            ["Decision", data.summary.decision],
+            ["Variance", data.summary.varianceBand]
+          ]}
+        />
+        <SignalList items={data.summary.warnings} />
+      </Surface>
       <div style={twoColumnStyle}>
         <Surface title="1% low comparison" eyebrow="Native frames only">
           <BenchmarkChart points={data.chart} />

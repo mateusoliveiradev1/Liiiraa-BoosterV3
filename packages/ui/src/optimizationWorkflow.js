@@ -1034,6 +1034,29 @@ export const optimizationWorkflow = {
           variant: "ghost"
         }
       ],
+      summary: {
+        score: "72/100",
+        confidence: "Medium confidence",
+        decision: "Prefer after run",
+        varianceBand: "+/-3%",
+        detail: "Weighted from 1% lows, 0.1% lows, p95 frametime, average FPS, and dropped frames.",
+        warnings: [
+          {
+            id: "score-variance",
+            label: "Variance",
+            value: "Warn",
+            detail: "Average FPS is useful context, but the score depends on lows clearing the +/-3% band.",
+            tone: "warning"
+          },
+          {
+            id: "score-confidence",
+            label: "Confidence",
+            value: "Medium",
+            detail: "Repeat the same map, route, duration, driver, and power plan before calling it final.",
+            tone: "warning"
+          }
+        ]
+      },
       chart: [
         {
           id: "baseline",
@@ -1243,6 +1266,16 @@ export function assertOptimizationWorkflowSmoke(workflow = optimizationWorkflow)
 
   if (gaming.benchmarks.chart.length < 2 || gaming.benchmarks.metadata.length === 0) {
     throw new Error("Benchmark surface must include comparison data and metadata.");
+  }
+
+  const benchmarkSummary = gaming.benchmarks.summary;
+  if (!benchmarkSummary?.score || !benchmarkSummary?.confidence || !benchmarkSummary?.decision) {
+    throw new Error("Benchmark surface must include comparison score, confidence, and decision.");
+  }
+
+  const hasVarianceWarning = benchmarkSummary.warnings?.some((warning) => /variance/i.test(warning.label)) === true;
+  if (!hasVarianceWarning) {
+    throw new Error("Benchmark comparison summary must disclose variance warnings.");
   }
 }
 
@@ -1481,6 +1514,13 @@ export function renderOptimizationWorkflowSmokeHtml(workflow = optimizationWorkf
           </section>
           <section class="panel">
             <h2>Benchmarks</h2>
+            <div class="row" data-tone="warning">
+              <b>${workflow.gaming.benchmarks.summary.score}</b>
+              <span>${workflow.gaming.benchmarks.summary.decision}</span>
+              <span>${workflow.gaming.benchmarks.summary.confidence}</span>
+              <span>${workflow.gaming.benchmarks.summary.varianceBand}</span>
+            </div>
+            ${renderStatusRows(workflow.gaming.benchmarks.summary.warnings)}
             ${workflow.gaming.benchmarks.chart.map(renderBenchmarkBar).join("")}
             ${workflow.gaming.benchmarks.sessions
               .map((session) => `<div class="row" data-tone="${session.tone}"><b>${session.label}</b><span>${session.value}</span><span>${session.detail}</span><span>${session.id}</span></div>`)
