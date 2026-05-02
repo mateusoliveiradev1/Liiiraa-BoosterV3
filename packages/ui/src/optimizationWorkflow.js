@@ -911,28 +911,60 @@ export const optimizationWorkflow = {
       },
       checklist: [
         {
-          id: "visibility",
+          id: "pubg.settings.visibility",
           label: "Visibility settings",
-          value: "Manual review",
-          detail: "Performance and visibility recommendations show risk before apply.",
+          value: "Backed-up apply",
+          detail:
+            "Snapshot config first; recommend supported keys for shadows, effects, foliage, render scale, and clarity only after user review.",
           tone: "success"
         },
         {
-          id: "nvidia",
-          label: "NVIDIA profile",
-          value: "Linked",
-          detail: "PUBG profile applies to TslGame.exe instead of forcing global settings.",
+          id: "game.graphics.preference.pubg",
+          label: "Windows GPU preference",
+          value: "High performance",
+          detail: "Set TslGame.exe to the high-performance GPU when Windows exposes the app preference; back up the prior value.",
           tone: "active"
         },
         {
-          id: "repair",
+          id: "game.capture.background.off",
+          label: "Capture and Game Mode",
+          value: "Safe Windows plan",
+          detail:
+            "Keep Game Mode visible, disable unused background capture, and warn before GameDVR/FSO changes when HDR or ICC workflows are present.",
+          tone: "warning"
+        },
+        {
+          id: "game.present-path.benchmark",
+          label: "Present path",
+          value: "Benchmark",
+          detail: "Compare fullscreen, borderless, VRR, HAGS, and overlay combinations instead of assuming one path wins.",
+          tone: "warning"
+        },
+        {
+          id: "nvidia.pubg.profile",
+          label: "NVIDIA profile",
+          value: "TslGame.exe scoped",
+          detail:
+            "Use the PUBG profile link for max performance, highest refresh, and texture-filtering choices; block writes while PUBG or BattlEye is running.",
+          tone: "active"
+        },
+        {
+          id: "nvidia.reflex-vs-llm.policy",
+          label: "Reflex and frame cap",
+          value: "No blind stacking",
+          detail:
+            "Prefer in-game Reflex when available, avoid driver Ultra as a default, and tie the cap to detected refresh and VRR state.",
+          tone: "success"
+        },
+        {
+          id: "pubg.files.verify",
           label: "Verify files",
           value: "Store flow",
           detail: "Crashes or corruption route to Steam/Epic repair, not file deletion.",
           tone: "warning"
         },
         {
-          id: "blocked",
+          id: "blocked.anticheat-tamper",
           label: "Unsafe tweaks",
           value: "Denied",
           detail: "Realtime priority, memory edits, and BattlEye tamper remain blocked.",
@@ -1177,6 +1209,36 @@ export function assertOptimizationWorkflowSmoke(workflow = optimizationWorkflow)
   const defaultedDxChoice = gaming.pubg.dxChoices.find((choice) => /default selected/i.test(choice.state));
   if (defaultedDxChoice) {
     throw new Error(`PUBG DX choice must not be default-selected: ${defaultedDxChoice.label}`);
+  }
+
+  const requiredPubgChecklist = [
+    "pubg.settings.visibility",
+    "game.graphics.preference.pubg",
+    "game.capture.background.off",
+    "game.present-path.benchmark",
+    "nvidia.pubg.profile",
+    "nvidia.reflex-vs-llm.policy",
+    "blocked.anticheat-tamper"
+  ];
+  const pubgChecklistIds = new Set(gaming.pubg.checklist.map((item) => item.id));
+  const missingPubgChecklist = requiredPubgChecklist.filter((item) => !pubgChecklistIds.has(item));
+
+  if (missingPubgChecklist.length > 0) {
+    throw new Error(`PUBG competitive checklist missing: ${missingPubgChecklist.join(", ")}`);
+  }
+
+  const hasWindowsCrossPlan = gaming.pubg.checklist.some((item) =>
+    /Windows|GameDVR|HAGS|VRR|fullscreen|borderless|overlay/i.test(`${item.label} ${item.detail}`)
+  );
+  if (!hasWindowsCrossPlan) {
+    throw new Error("PUBG checklist must include Windows graphics and present-path planning.");
+  }
+
+  const hasNvidiaCrossPlan = gaming.pubg.checklist.some((item) =>
+    /NVIDIA|Reflex|frame cap|refresh|BattlEye/i.test(`${item.label} ${item.detail}`)
+  );
+  if (!hasNvidiaCrossPlan) {
+    throw new Error("PUBG checklist must include NVIDIA profile and latency/cap planning.");
   }
 
   if (gaming.benchmarks.chart.length < 2 || gaming.benchmarks.metadata.length === 0) {
