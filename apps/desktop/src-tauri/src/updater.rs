@@ -5,6 +5,8 @@ use url::Url;
 
 const DEFAULT_RELEASE_CHANNEL: ReleaseChannel = ReleaseChannel::Stable;
 const UPDATE_ENDPOINT_ORIGIN: &str = "https://updates.liiiraa.example";
+const CATALOG_API_ENDPOINT: &str = "https://api.liiiraa.example/trpc/catalog.latest";
+const CATALOG_CACHE_KEY: &str = "liiiraa:last-known-good-catalog";
 const WINDOWS_INSTALL_MODE: &str = "passive";
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -48,6 +50,7 @@ pub(crate) struct CheckSignedUpdateRequest {
 pub(crate) struct UpdaterConfigurationResponse {
     default_channel: ReleaseChannel,
     channels: Vec<UpdaterChannelResponse>,
+    catalog_rollback: CatalogRollbackConfigurationResponse,
     create_updater_artifacts: bool,
     dangerous_insecure_transport_protocol: bool,
     private_key_embedded: bool,
@@ -61,6 +64,18 @@ pub(crate) struct UpdaterChannelResponse {
     id: ReleaseChannel,
     endpoint: String,
     rollout_policy: &'static str,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CatalogRollbackConfigurationResponse {
+    api_endpoint: &'static str,
+    audit_catalog_version: bool,
+    bad_catalog_strategy: &'static str,
+    cache_key: &'static str,
+    last_known_good_fallback: bool,
+    remote_kill_switch_honored: bool,
+    revoked_catalogs_rejected: bool,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -131,12 +146,25 @@ fn updater_configuration() -> Result<UpdaterConfigurationResponse, UpdaterErrorR
             .into_iter()
             .map(updater_channel_response)
             .collect::<Result<Vec<_>, _>>()?,
+        catalog_rollback: catalog_rollback_configuration(),
         create_updater_artifacts: true,
         dangerous_insecure_transport_protocol: false,
         private_key_embedded: false,
         signature_required: true,
         windows_install_mode: WINDOWS_INSTALL_MODE,
     })
+}
+
+fn catalog_rollback_configuration() -> CatalogRollbackConfigurationResponse {
+    CatalogRollbackConfigurationResponse {
+        api_endpoint: CATALOG_API_ENDPOINT,
+        audit_catalog_version: true,
+        bad_catalog_strategy: "reject revoked or disabled remote catalogs, then use the signed last-known-good cache",
+        cache_key: CATALOG_CACHE_KEY,
+        last_known_good_fallback: true,
+        remote_kill_switch_honored: true,
+        revoked_catalogs_rejected: true,
+    }
 }
 
 fn updater_channel_response(
@@ -194,6 +222,10 @@ mod tests {
         assert!(config.create_updater_artifacts);
         assert!(!config.dangerous_insecure_transport_protocol);
         assert!(!config.private_key_embedded);
+        assert!(config.catalog_rollback.remote_kill_switch_honored);
+        assert!(config.catalog_rollback.last_known_good_fallback);
+        assert!(config.catalog_rollback.revoked_catalogs_rejected);
+        assert!(config.catalog_rollback.audit_catalog_version);
     }
 
     #[test]

@@ -58,6 +58,62 @@ export type SignedCatalogEnvelope = {
   signature: CatalogSignature;
 };
 
+export type CatalogDeliveryAction = "serve_latest" | "serve_rollback";
+
+export type CatalogRollbackControls = {
+  audit?: {
+    author?: string;
+    reason?: string;
+    riskChange?: string;
+    sourceReferences?: string[];
+    timestampUtc?: string;
+  };
+  author?: string;
+  channels?: Partial<
+    Record<
+      CatalogChannel,
+      {
+        author?: string;
+        disabledCatalogVersions?: string[];
+        killSwitch?: boolean | { enabled: boolean; reason?: string };
+        reason?: string;
+        riskChange?: string;
+        rollbackCatalogVersion?: string;
+        rolloutPaused?: boolean;
+        sourceReferences?: string[];
+        timestampUtc?: string;
+      }
+    >
+  >;
+  disabledCatalogVersions?: string[];
+  killSwitch?: boolean | { enabled: boolean; reason?: string };
+  pausedChannels?: CatalogChannel[];
+  reason?: string;
+  riskChange?: string;
+  rollbackCatalogVersion?: string;
+  rollbackCatalogVersionByChannel?: Partial<Record<CatalogChannel, string>>;
+  rolloutPaused?: boolean;
+  sourceReferences?: string[];
+  timestampUtc?: string;
+};
+
+export type CatalogDeliveryResolution = {
+  action: CatalogDeliveryAction;
+  auditEvent: {
+    action: CatalogDeliveryAction;
+    author: string;
+    catalogVersion: string;
+    channel: CatalogChannel;
+    reason: string;
+    rollbackPlan: string;
+    riskChange: string;
+    sourceReferences: string[];
+    timestampUtc: string;
+  };
+  envelope: SignedCatalogEnvelope;
+  reason: string;
+};
+
 export type CatalogValidationIssue = {
   code: string;
   expected: string;
@@ -86,6 +142,14 @@ export function selectSignedCatalogForChannel(
   catalogs: SignedCatalogEnvelope[],
   channel?: CatalogChannel
 ): SignedCatalogEnvelope;
+export function resolveSignedCatalogForDelivery(
+  catalogs: SignedCatalogEnvelope[],
+  request?: {
+    channel?: CatalogChannel;
+    clientVersion?: string;
+  },
+  controls?: CatalogRollbackControls
+): CatalogDeliveryResolution;
 export function signCatalogPayload(
   payload: CatalogPayload,
   options: CatalogValidationOptions & {

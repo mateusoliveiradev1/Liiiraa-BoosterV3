@@ -4,6 +4,7 @@ import {
   CatalogValidationError,
   canonicalizeCatalogJson,
   digestCatalogPayload,
+  resolveSignedCatalogForDelivery,
   signCatalogPayload,
   validateCatalogPayload,
   verifySignedCatalogEnvelope
@@ -126,6 +127,75 @@ describe("signed remote tweak catalogs", () => {
     );
   });
 
+  it("serves a signed rollback catalog when the remote kill switch disables the latest catalog", async () => {
+    const { catalogs, publicKeyJwk } = await createSignedRollbackCatalogs();
+    const resolution = resolveSignedCatalogForDelivery(
+      catalogs,
+      {
+        channel: "stable",
+        clientVersion: "0.0.0"
+      },
+      {
+        audit: {
+          author: "release.ops",
+          reason: "Bad stable catalog detected in telemetry.",
+          riskChange: "high-to-low",
+          sourceReferences: ["support:catalog-rollback"],
+          timestampUtc: "2026-05-02T12:00:00.000Z"
+        },
+        killSwitch: {
+          enabled: true,
+          reason: "Bad stable catalog detected in telemetry."
+        },
+        rollbackCatalogVersion: "2026.05.01-stable.good"
+      }
+    );
+    const verified = await verifySignedCatalogEnvelope(resolution.envelope, { publicKeyJwk });
+
+    assert.equal(resolution.action, "serve_rollback");
+    assert.equal(resolution.reason, "Bad stable catalog detected in telemetry.");
+    assert.equal(resolution.auditEvent.author, "release.ops");
+    assert.equal(resolution.auditEvent.catalogVersion, "2026.05.01-stable.good");
+    assert.equal(verified.payload.catalogVersion, "2026.05.01-stable.good");
+  });
+
+  it("blocks remote delivery when a disabled catalog has no valid rollback target", async () => {
+    const { latest } = await createSignedRollbackCatalogs();
+
+    assert.throws(
+      () =>
+        resolveSignedCatalogForDelivery(
+          [latest],
+          {
+            channel: "stable",
+            clientVersion: "0.0.0"
+          },
+          {
+            disabledCatalogVersions: ["2026.05.02-stable.bad"]
+          }
+        ),
+      (error) =>
+        error instanceof CatalogValidationError &&
+        error.issues.some((issue) => issue.code === "missing_rollback_catalog")
+    );
+  });
+
+  it("rolls back when the latest catalog blocks the running app version", async () => {
+    const { catalogs } = await createSignedRollbackCatalogs({
+      latestPatch: {
+        blockedAppVersions: ["0.0.0"]
+      }
+    });
+    const resolution = resolveSignedCatalogForDelivery(catalogs, {
+      channel: "stable",
+      clientVersion: "0.0.0"
+    });
+
+    assert.equal(resolution.action, "serve_rollback");
+    assert.equal(resolution.reason, "blocked_app_version");
+    assert.equal(resolution.envelope.payload.catalogVersion, "2026.05.01-stable.good");
+  });
+
   it("can sign and verify a generated test catalog without storing a private key", async () => {
     const keyPair = await globalThis.crypto.subtle.generateKey(
       {
@@ -155,3 +225,50 @@ describe("signed remote tweak catalogs", () => {
     assert.equal(canonicalizeCatalogJson(signed.payload), canonicalizeCatalogJson(payload));
   });
 });
+
+async function createSignedRollbackCatalogs(options = {}) {
+  const keyPair = await globalThis.crypto.subtle.generateKey(
+    {
+      name: "ECDSA",
+      namedCurve: "P-256"
+    },
+    true,
+    ["sign", "verify"]
+  );
+  const privateKeyJwk = await globalThis.crypto.subtle.exportKey("jwk", keyPair.privateKey);
+  const publicKeyJwk = await globalThis.crypto.subtle.exportKey("jwk", keyPair.publicKey);
+  const basePayload = {
+    ...DEFAULT_SIGNED_TWEAK_CATALOG.payload,
+    channel: "stable"
+  };
+  const latest = await signCatalogPayload(
+    {
+      ...basePayload,
+      ...options.latestPatch,
+      catalogVersion: "2026.05.02-stable.bad"
+    },
+    {
+      keyId: "rollback-test-key",
+      privateKeyJwk,
+      publicKeyJwk
+    }
+  );
+  const rollback = await signCatalogPayload(
+    {
+      ...basePayload,
+      catalogVersion: "2026.05.01-stable.good"
+    },
+    {
+      keyId: "rollback-test-key",
+      privateKeyJwk,
+      publicKeyJwk
+    }
+  );
+
+  return {
+    catalogs: [latest, rollback],
+    latest,
+    publicKeyJwk,
+    rollback
+  };
+}

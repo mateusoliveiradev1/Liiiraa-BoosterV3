@@ -34,7 +34,8 @@ export {
   validateBenchmarkSyncEnvelope
 } from "./benchmark-sync.js";
 export {
-  createCatalogDeliveryResponse
+  createCatalogDeliveryResponse,
+  loadCatalogRollbackControls
 } from "./catalog-delivery.js";
 export {
   API_FEATURE_FLAGS_VERSION,

@@ -16,6 +16,7 @@ const SAFE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const TWEAK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/;
 const SHA256_REF_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
+const DEFAULT_ROLLBACK_AUTHOR = "liiiraa-release-ops";
 
 export class CatalogValidationError extends Error {
   constructor(message, issues = []) {
@@ -228,6 +229,62 @@ export function selectSignedCatalogForChannel(catalogs, channel = "stable") {
   return catalog;
 }
 
+export function resolveSignedCatalogForDelivery(catalogs, request = {}, controls = {}) {
+  if (!Array.isArray(catalogs)) {
+    throw new CatalogValidationError("Catalog delivery requires an array of signed catalogs.", [
+      issue(["catalogs"], "invalid_type", "array")
+    ]);
+  }
+
+  const channel = CHANNELS.has(request.channel) ? request.channel : "stable";
+  const candidates = catalogs.filter((candidate) => candidate?.payload?.channel === channel);
+
+  if (candidates.length === 0) {
+    throw new CatalogValidationError("No signed catalog exists for requested channel.", [
+      issue(["channel"], "unknown_channel_catalog", channel)
+    ]);
+  }
+
+  const control = normalizeCatalogDeliveryControls(controls, channel);
+  const latest = candidates[0];
+  const latestVersion = latest?.payload?.catalogVersion;
+  const latestBlock = catalogDeliveryBlockReason(latest, {
+    clientVersion: request.clientVersion,
+    control
+  });
+  const forcedRollback = control.killSwitchEnabled || control.rolloutPaused;
+
+  if (!forcedRollback && !latestBlock) {
+    return createCatalogDeliveryResolution({
+      action: "serve_latest",
+      channel,
+      control,
+      envelope: latest,
+      reason: "latest_catalog"
+    });
+  }
+
+  const rollback = selectRollbackCatalog(candidates, {
+    clientVersion: request.clientVersion,
+    control,
+    latestVersion
+  });
+
+  if (!rollback) {
+    throw new CatalogValidationError("Catalog delivery is disabled by remote rollback controls.", [
+      issue(["rollbackCatalogVersion"], "missing_rollback_catalog", "signed non-revoked catalog")
+    ]);
+  }
+
+  return createCatalogDeliveryResolution({
+    action: "serve_rollback",
+    channel,
+    control,
+    envelope: rollback,
+    reason: control.reason ?? latestBlock?.code ?? "catalog_rollback"
+  });
+}
+
 export function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
@@ -239,6 +296,239 @@ export function deepFreeze(value) {
   }
 
   return value;
+}
+
+function normalizeCatalogDeliveryControls(controls, channel) {
+  const root = isPlainObject(controls) ? controls : {};
+  const channelControlsRoot = isPlainObject(root.channels) ? root.channels : {};
+  const channelControls = isPlainObject(channelControlsRoot[channel]) ? channelControlsRoot[channel] : {};
+  const issues = [];
+  const killSwitch = normalizeKillSwitch(
+    channelControls.killSwitch ?? root.killSwitch,
+    ["killSwitch"],
+    issues
+  );
+  const disabledCatalogVersions = [
+    ...readControlStringArray(root.disabledCatalogVersions, ["disabledCatalogVersions"], issues, {
+      pattern: SAFE_ID_PATTERN
+    }),
+    ...readControlStringArray(
+      channelControls.disabledCatalogVersions,
+      ["channels", channel, "disabledCatalogVersions"],
+      issues,
+      {
+        pattern: SAFE_ID_PATTERN
+      }
+    )
+  ];
+  const pausedChannels = new Set(
+    readControlStringArray(root.pausedChannels, ["pausedChannels"], issues).filter((value) =>
+      CHANNELS.has(value)
+    )
+  );
+  const audit = isPlainObject(root.audit) ? root.audit : {};
+  const sourceReferences = readControlStringArray(
+    channelControls.sourceReferences ?? root.sourceReferences ?? audit.sourceReferences,
+    ["sourceReferences"],
+    issues,
+    {
+      maxLength: 160
+    }
+  );
+  const rollbackCatalogVersion = readOptionalControlString(
+    channelControls.rollbackCatalogVersion ??
+      (isPlainObject(root.rollbackCatalogVersionByChannel)
+        ? root.rollbackCatalogVersionByChannel[channel]
+        : undefined) ??
+      root.rollbackCatalogVersion,
+    ["rollbackCatalogVersion"],
+    issues,
+    {
+      maxLength: 96,
+      pattern: SAFE_ID_PATTERN
+    }
+  );
+
+  if (issues.length > 0) {
+    throw new CatalogValidationError("Catalog rollback controls failed validation.", issues);
+  }
+
+  return {
+    author:
+      readOptionalControlString(channelControls.author ?? root.author ?? audit.author, ["author"], [], {
+        maxLength: 96,
+        pattern: SAFE_ID_PATTERN
+      }) ?? DEFAULT_ROLLBACK_AUTHOR,
+    disabledCatalogVersions: new Set(disabledCatalogVersions),
+    killSwitchEnabled: killSwitch.enabled,
+    reason:
+      readOptionalControlString(
+        channelControls.reason ?? root.reason ?? killSwitch.reason ?? audit.reason,
+        ["reason"],
+        [],
+        { maxLength: 240 }
+      ) ?? (killSwitch.enabled ? "Remote catalog kill switch enabled." : undefined),
+    riskChange:
+      readOptionalControlString(
+        channelControls.riskChange ?? root.riskChange ?? audit.riskChange,
+        ["riskChange"],
+        [],
+        { maxLength: 160 }
+      ) ?? "no-risk-change",
+    rollbackCatalogVersion,
+    rolloutPaused:
+      channelControls.rolloutPaused === true || root.rolloutPaused === true || pausedChannels.has(channel),
+    sourceReferences,
+    timestampUtc:
+      readOptionalControlString(
+        channelControls.timestampUtc ?? root.timestampUtc ?? audit.timestampUtc,
+        ["timestampUtc"],
+        [],
+        { maxLength: 40 }
+      ) ?? new Date().toISOString()
+  };
+}
+
+function normalizeKillSwitch(value, path, issues) {
+  if (value === undefined || value === null || value === false) {
+    return { enabled: false };
+  }
+
+  if (value === true) {
+    return { enabled: true };
+  }
+
+  if (!isPlainObject(value)) {
+    issues.push(issue(path, "invalid_type", "boolean or object"));
+    return { enabled: false };
+  }
+
+  if (typeof value.enabled !== "boolean") {
+    issues.push(issue([...path, "enabled"], "invalid_type", "boolean"));
+    return { enabled: false };
+  }
+
+  return {
+    enabled: value.enabled,
+    reason: readOptionalControlString(value.reason, [...path, "reason"], issues, {
+      maxLength: 240
+    })
+  };
+}
+
+function selectRollbackCatalog(candidates, options) {
+  if (options.control.rollbackCatalogVersion) {
+    const explicit = candidates.find(
+      (candidate) => candidate?.payload?.catalogVersion === options.control.rollbackCatalogVersion
+    );
+
+    if (
+      explicit &&
+      explicit?.payload?.catalogVersion !== options.latestVersion &&
+      !catalogDeliveryBlockReason(explicit, options)
+    ) {
+      return explicit;
+    }
+
+    return undefined;
+  }
+
+  return candidates.find(
+    (candidate) =>
+      candidate?.payload?.catalogVersion !== options.latestVersion &&
+      !catalogDeliveryBlockReason(candidate, options)
+  );
+}
+
+function catalogDeliveryBlockReason(candidate, options) {
+  if (!isPlainObject(candidate?.payload)) {
+    return issue(["payload"], "invalid_type", "catalog payload");
+  }
+
+  const version = candidate.payload.catalogVersion;
+  if (typeof version !== "string") {
+    return issue(["catalogVersion"], "invalid_type", "string");
+  }
+
+  if (candidate.payload.revoked === true) {
+    return issue(["revoked"], "revoked_catalog", "active catalog");
+  }
+
+  if (options.control.disabledCatalogVersions.has(version)) {
+    return issue(["catalogVersion"], "catalog_version_disabled", "enabled catalog version");
+  }
+
+  if (
+    typeof options.clientVersion === "string" &&
+    Array.isArray(candidate.payload.blockedAppVersions) &&
+    candidate.payload.blockedAppVersions.includes(options.clientVersion)
+  ) {
+    return issue(["blockedAppVersions"], "blocked_app_version", options.clientVersion);
+  }
+
+  return undefined;
+}
+
+function createCatalogDeliveryResolution({ action, channel, control, envelope, reason }) {
+  const version = envelope.payload.catalogVersion;
+
+  return {
+    action,
+    auditEvent: {
+      action,
+      author: control.author,
+      catalogVersion: version,
+      channel,
+      reason,
+      rollbackPlan:
+        action === "serve_rollback"
+          ? `Serve signed catalog ${version} while the unsafe catalog is disabled.`
+          : "Serve the latest signed catalog.",
+      riskChange: control.riskChange,
+      sourceReferences: control.sourceReferences,
+      timestampUtc: control.timestampUtc
+    },
+    envelope,
+    reason
+  };
+}
+
+function readControlStringArray(value, path, issues, options = {}) {
+  if (value === undefined || value === null || value === "") {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    issues.push(issue(path, "invalid_type", "array"));
+    return [];
+  }
+
+  const parsed = [];
+  value.forEach((item, index) => {
+    const controlValue = readSafeString(item, [...path, index], {
+      issues,
+      maxLength: options.maxLength ?? 96,
+      pattern: options.pattern
+    });
+
+    if (controlValue) {
+      parsed.push(controlValue);
+    }
+  });
+
+  return parsed;
+}
+
+function readOptionalControlString(value, path, issues, options = {}) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  return readSafeString(value, path, {
+    issues,
+    maxLength: options.maxLength ?? 256,
+    pattern: options.pattern
+  });
 }
 
 async function verifyCatalogSignature({ canonicalPayload, publicKeyJwk, signatureValue }) {
