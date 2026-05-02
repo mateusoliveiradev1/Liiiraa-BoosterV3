@@ -334,6 +334,11 @@ impl PresentMonCapture {
             )
         })
     }
+
+    /// Calculates aggregate frametime, FPS, dropped-frame, and busy-time metrics.
+    pub fn metrics(&self) -> Result<BenchmarkFrameMetrics, BenchmarkError> {
+        calculate_capture_metrics(self)
+    }
 }
 
 /// One PresentMon raw frame-event row.
@@ -353,6 +358,10 @@ pub struct PresentMonFrameEvent {
     pub gpu_busy_ms: Option<f64>,
     /// Whether PresentMon marked the frame as dropped.
     pub dropped: Option<bool>,
+    /// Dropped frame count represented by this row where available.
+    pub dropped_frame_count: Option<u32>,
+    /// Delayed frame count represented by this row where available.
+    pub delayed_frame_count: Option<u32>,
     /// Whether the row represents an application-rendered or generated/interpolated frame.
     pub frame_type: Option<PresentMonFrameType>,
     /// Best available latency measurement for the row.
@@ -404,6 +413,71 @@ impl PresentMonLatencySource {
     }
 }
 
+/// Aggregate metrics parsed from a PresentMon-compatible frame capture.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BenchmarkFrameMetrics {
+    /// Parsed frame-event rows, including rows without a usable frame time.
+    pub frame_count: usize,
+    /// Rows that supplied a positive finite frame time.
+    pub measured_frame_count: usize,
+    /// Average FPS derived from measured frame times.
+    pub average_fps: f64,
+    /// One percent low FPS derived from the p99 frametime.
+    pub one_percent_low_fps: f64,
+    /// Point-one percent low FPS derived from the p99.9 frametime.
+    pub point_one_percent_low_fps: f64,
+    /// Median frametime in milliseconds.
+    pub p50_frame_time_ms: f64,
+    /// P95 frametime in milliseconds.
+    pub p95_frame_time_ms: f64,
+    /// P99 frametime in milliseconds.
+    pub p99_frame_time_ms: f64,
+    /// Dropped frame count where capture tooling exposes it.
+    pub dropped_frames: u32,
+    /// Delayed frame count where capture tooling exposes it.
+    pub delayed_frames: u32,
+    /// CPU busy timing summary when available.
+    pub cpu_busy: Option<BusyTimeMetrics>,
+    /// GPU busy timing summary when available.
+    pub gpu_busy: Option<BusyTimeMetrics>,
+    /// Frames explicitly labeled generated or interpolated.
+    pub generated_or_interpolated_frame_count: usize,
+    /// Frames not explicitly labeled generated or interpolated.
+    pub native_or_unknown_frame_count: usize,
+}
+
+impl BenchmarkFrameMetrics {
+    /// Returns true when generated or interpolated frame rows are present.
+    #[must_use]
+    pub const fn has_generated_or_interpolated_frames(&self) -> bool {
+        self.generated_or_interpolated_frame_count > 0
+    }
+
+    /// Converts aggregate metrics into the comparison summary shape.
+    #[must_use]
+    pub fn to_run_summary(&self, label: impl Into<String>) -> BenchmarkRunSummary {
+        BenchmarkRunSummary::new(
+            label,
+            self.average_fps,
+            self.one_percent_low_fps,
+            self.point_one_percent_low_fps,
+            self.p95_frame_time_ms,
+            self.dropped_frames.saturating_add(self.delayed_frames),
+        )
+    }
+}
+
+/// Aggregate CPU or GPU busy timing metrics.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BusyTimeMetrics {
+    /// Number of valid busy-time samples.
+    pub sample_count: usize,
+    /// Average busy time in milliseconds.
+    pub average_ms: f64,
+    /// P95 busy time in milliseconds.
+    pub p95_ms: f64,
+}
+
 /// Benchmark crate error type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BenchmarkError {
@@ -438,6 +512,8 @@ pub enum BenchmarkError {
         /// Raw value.
         value: String,
     },
+    /// Capture rows did not include positive finite frame-time samples.
+    MissingFrameTimeSamples,
 }
 
 impl fmt::Display for BenchmarkError {
@@ -460,6 +536,9 @@ impl fmt::Display for BenchmarkError {
             }
             Self::InvalidBoolean { column, value } => {
                 write!(formatter, "invalid boolean value in column {column}: {value}")
+            }
+            Self::MissingFrameTimeSamples => {
+                formatter.write_str("PresentMon CSV has no usable frame-time samples")
             }
         }
     }
@@ -485,6 +564,11 @@ pub fn parse_presentmon_csv(csv: &str) -> Result<PresentMonCapture, BenchmarkErr
 
     let mut frames = Vec::with_capacity(rows.len().saturating_sub(1));
     for row in rows.iter().skip(1).filter(|row| !is_empty_row(row)) {
+        let dropped_frame_count =
+            parse_optional_frame_count(&column_map, row, &["Dropped", "Dropped Frames"])?;
+        let delayed_frame_count =
+            parse_optional_frame_count(&column_map, row, &["Delayed", "Delayed Frames"])?;
+
         frames.push(PresentMonFrameEvent {
             application: value_at(row, application_column).trim().to_owned(),
             process_id: parse_optional_u32(&column_map, row, &["ProcessID"])?,
@@ -505,7 +589,9 @@ pub fn parse_presentmon_csv(csv: &str) -> Result<PresentMonCapture, BenchmarkErr
             )?,
             cpu_busy_ms: parse_optional_f64(&column_map, row, &["CPUBusy"])?,
             gpu_busy_ms: parse_optional_f64(&column_map, row, &["GPUBusy", "MsGPUActive"])?,
-            dropped: parse_optional_bool(&column_map, row, &["Dropped", "Dropped Frames"])?,
+            dropped: dropped_frame_count.map(|count| count > 0),
+            dropped_frame_count,
+            delayed_frame_count,
             frame_type: parse_optional_frame_type(&column_map, row)?,
             latency: parse_latency_sample(&column_map, row)?,
             raw_values: raw_value_map(headers, row),
@@ -516,6 +602,11 @@ pub fn parse_presentmon_csv(csv: &str) -> Result<PresentMonCapture, BenchmarkErr
         headers: headers.clone(),
         frames,
     })
+}
+
+/// Parses a PresentMon-compatible CSV and returns aggregate benchmark metrics.
+pub fn parse_presentmon_metrics(csv: &str) -> Result<BenchmarkFrameMetrics, BenchmarkError> {
+    parse_presentmon_csv(csv)?.metrics()
 }
 
 /// One measured benchmark run summarized into stable comparison metrics.
@@ -662,6 +753,135 @@ fn percent_delta(baseline: f64, candidate: f64) -> f64 {
     ((candidate - baseline) / baseline) * 100.0
 }
 
+fn calculate_capture_metrics(
+    capture: &PresentMonCapture,
+) -> Result<BenchmarkFrameMetrics, BenchmarkError> {
+    let frame_time_samples = positive_finite_values(
+        capture
+            .frames
+            .iter()
+            .filter_map(|frame| frame.frame_time_ms),
+    );
+    if frame_time_samples.is_empty() {
+        return Err(BenchmarkError::MissingFrameTimeSamples);
+    }
+
+    let sorted_frame_times = sorted_values(&frame_time_samples);
+    let average_frame_time_ms = average(&frame_time_samples);
+    let p50_frame_time_ms = percentile(&sorted_frame_times, 0.50);
+    let p95_frame_time_ms = percentile(&sorted_frame_times, 0.95);
+    let p99_frame_time_ms = percentile(&sorted_frame_times, 0.99);
+    let p999_frame_time_ms = percentile(&sorted_frame_times, 0.999);
+    let generated_or_interpolated_frame_count = capture
+        .frames
+        .iter()
+        .filter(|frame| {
+            matches!(
+                frame.frame_type.as_ref(),
+                Some(PresentMonFrameType::Generated | PresentMonFrameType::Interpolated)
+            )
+        })
+        .count();
+
+    Ok(BenchmarkFrameMetrics {
+        frame_count: capture.frame_count(),
+        measured_frame_count: frame_time_samples.len(),
+        average_fps: fps_from_frame_time_ms(average_frame_time_ms),
+        one_percent_low_fps: fps_from_frame_time_ms(p99_frame_time_ms),
+        point_one_percent_low_fps: fps_from_frame_time_ms(p999_frame_time_ms),
+        p50_frame_time_ms,
+        p95_frame_time_ms,
+        p99_frame_time_ms,
+        dropped_frames: sum_frame_counts(capture.frames.iter().map(|frame| {
+            frame.dropped_frame_count
+                .or_else(|| frame.dropped.map(|dropped| if dropped { 1 } else { 0 }))
+        })),
+        delayed_frames: sum_frame_counts(
+            capture
+                .frames
+                .iter()
+                .map(|frame| frame.delayed_frame_count),
+        ),
+        cpu_busy: busy_time_metrics(capture.frames.iter().filter_map(|frame| frame.cpu_busy_ms)),
+        gpu_busy: busy_time_metrics(capture.frames.iter().filter_map(|frame| frame.gpu_busy_ms)),
+        generated_or_interpolated_frame_count,
+        native_or_unknown_frame_count: capture
+            .frame_count()
+            .saturating_sub(generated_or_interpolated_frame_count),
+    })
+}
+
+fn sum_frame_counts(counts: impl Iterator<Item = Option<u32>>) -> u32 {
+    counts.fold(0_u32, |total, count| {
+        total.saturating_add(count.unwrap_or_default())
+    })
+}
+
+fn busy_time_metrics(samples: impl Iterator<Item = f64>) -> Option<BusyTimeMetrics> {
+    let samples = non_negative_finite_values(samples);
+    if samples.is_empty() {
+        return None;
+    }
+
+    let sorted_samples = sorted_values(&samples);
+    Some(BusyTimeMetrics {
+        sample_count: samples.len(),
+        average_ms: average(&samples),
+        p95_ms: percentile(&sorted_samples, 0.95),
+    })
+}
+
+fn positive_finite_values(samples: impl Iterator<Item = f64>) -> Vec<f64> {
+    samples
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .collect()
+}
+
+fn non_negative_finite_values(samples: impl Iterator<Item = f64>) -> Vec<f64> {
+    samples
+        .filter(|value| value.is_finite() && *value >= 0.0)
+        .collect()
+}
+
+fn sorted_values(samples: &[f64]) -> Vec<f64> {
+    let mut sorted = samples.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    sorted
+}
+
+fn average(samples: &[f64]) -> f64 {
+    samples.iter().sum::<f64>() / samples.len() as f64
+}
+
+fn percentile(sorted_samples: &[f64], percentile: f64) -> f64 {
+    debug_assert!(!sorted_samples.is_empty());
+
+    if sorted_samples.len() == 1 {
+        return sorted_samples[0];
+    }
+
+    let percentile = percentile.clamp(0.0, 1.0);
+    let position = percentile * (sorted_samples.len().saturating_sub(1)) as f64;
+    let lower_index = position.floor() as usize;
+    let upper_index = position.ceil() as usize;
+
+    if lower_index == upper_index {
+        sorted_samples[lower_index]
+    } else {
+        let lower = sorted_samples[lower_index];
+        let upper = sorted_samples[upper_index];
+        lower + (upper - lower) * (position - lower_index as f64)
+    }
+}
+
+fn fps_from_frame_time_ms(frame_time_ms: f64) -> f64 {
+    if frame_time_ms <= 0.0 {
+        return 0.0;
+    }
+
+    1_000.0 / frame_time_ms
+}
+
 /// Static metadata describing this workspace crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CrateInfo {
@@ -748,22 +968,33 @@ fn parse_optional_f64(
         })
 }
 
-fn parse_optional_bool(
+fn parse_optional_frame_count(
     column_map: &PresentMonColumnMap,
     row: &[String],
     candidates: &[&str],
-) -> Result<Option<bool>, BenchmarkError> {
+) -> Result<Option<u32>, BenchmarkError> {
     let Some((column, value)) = optional_value(column_map, row, candidates) else {
         return Ok(None);
     };
 
-    match value.to_ascii_lowercase().as_str() {
-        "0" | "false" | "no" => Ok(Some(false)),
-        "1" | "true" | "yes" => Ok(Some(true)),
-        _ => Err(BenchmarkError::InvalidBoolean {
+    if let Some(boolean) = parse_bool_literal(value) {
+        return Ok(Some(if boolean { 1 } else { 0 }));
+    }
+
+    value
+        .parse::<u32>()
+        .map(Some)
+        .map_err(|_| BenchmarkError::InvalidNumber {
             column,
             value: value.to_owned(),
-        }),
+        })
+}
+
+fn parse_bool_literal(value: &str) -> Option<bool> {
+    match value.to_ascii_lowercase().as_str() {
+        "0" | "false" | "no" => Some(false),
+        "1" | "true" | "yes" => Some(true),
+        _ => None,
     }
 }
 
@@ -1062,6 +1293,78 @@ mod tests {
     }
 
     #[test]
+    fn calculates_frametime_metrics_from_presentmon_csv_fixture() {
+        let csv = concat!(
+            "Application,FrameTime,CPUBusy,GPUBusy,Dropped,Delayed Frames,FrameType\n",
+            "TslGame.exe,5.0,2.0,4.0,false,0,Application\n",
+            "TslGame.exe,10.0,4.0,8.0,false,0,Application\n",
+            "TslGame.exe,15.0,6.0,12.0,true,2,Application\n",
+            "TslGame.exe,20.0,8.0,16.0,false,0,\"Generated Frame\"\n",
+            "TslGame.exe,25.0,10.0,20.0,false,0,Application\n",
+            "TslGame.exe,40.0,12.0,24.0,false,1,Interpolated\n",
+        );
+
+        let metrics = parse_presentmon_metrics(csv).expect("fixture metrics should parse");
+
+        assert_eq!(metrics.frame_count, 6);
+        assert_eq!(metrics.measured_frame_count, 6);
+        assert_close(metrics.average_fps, 52.1739);
+        assert_close(metrics.one_percent_low_fps, 25.4777);
+        assert_close(metrics.point_one_percent_low_fps, 25.0470);
+        assert_close(metrics.p50_frame_time_ms, 17.5);
+        assert_close(metrics.p95_frame_time_ms, 36.25);
+        assert_close(metrics.p99_frame_time_ms, 39.25);
+        assert_eq!(metrics.dropped_frames, 1);
+        assert_eq!(metrics.delayed_frames, 3);
+        assert_eq!(metrics.generated_or_interpolated_frame_count, 2);
+        assert_eq!(metrics.native_or_unknown_frame_count, 4);
+        assert!(metrics.has_generated_or_interpolated_frames());
+
+        let cpu_busy = metrics.cpu_busy.expect("CPU Busy should be available");
+        assert_eq!(cpu_busy.sample_count, 6);
+        assert_close(cpu_busy.average_ms, 7.0);
+        assert_close(cpu_busy.p95_ms, 11.5);
+
+        let gpu_busy = metrics.gpu_busy.expect("GPU Busy should be available");
+        assert_eq!(gpu_busy.sample_count, 6);
+        assert_close(gpu_busy.average_ms, 14.0);
+        assert_close(gpu_busy.p95_ms, 23.0);
+
+        let summary = metrics.to_run_summary("fixture");
+        assert_eq!(summary.label, "fixture");
+        assert_close(summary.p95_frame_ms, 36.25);
+        assert_eq!(summary.dropped_frames, 4);
+    }
+
+    #[test]
+    fn parses_numeric_dropped_frame_counts() {
+        let csv = concat!(
+            "Application,FrameTime,Dropped Frames\n",
+            "TslGame.exe,16.67,2\n",
+        );
+
+        let capture = parse_presentmon_csv(csv).expect("numeric dropped count should parse");
+        let frame = &capture.frames[0];
+
+        assert_eq!(frame.dropped, Some(true));
+        assert_eq!(frame.dropped_frame_count, Some(2));
+        assert_eq!(
+            capture.metrics().expect("metrics should calculate").dropped_frames,
+            2
+        );
+    }
+
+    #[test]
+    fn rejects_metrics_without_frame_time_samples() {
+        let error = parse_presentmon_metrics(
+            "Application,ProcessID,CPUBusy,GPUBusy\nTslGame.exe,128,2.0,5.0\n",
+        )
+        .expect_err("metrics need at least one frame time sample");
+
+        assert_eq!(error, BenchmarkError::MissingFrameTimeSamples);
+    }
+
+    #[test]
     fn rejects_capture_paths_without_csv_extension() {
         let error = PresentMonCapturePaths::from_raw_csv("captures/session.txt")
             .expect_err("non-csv capture path should fail");
@@ -1103,5 +1406,12 @@ mod tests {
             compare_benchmark_runs(&baseline, &candidate, DEFAULT_BENCHMARK_VARIANCE_PERCENT);
 
         assert_eq!(comparison.decision, BenchmarkDecision::Inconclusive);
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 0.0001,
+            "expected {actual} to be close to {expected}"
+        );
     }
 }
