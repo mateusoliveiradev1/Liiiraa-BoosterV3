@@ -1,14 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  API_AUTH_BOUNDARY_CONTRACT_VERSION,
   API_TRPC_PATH,
   ContractValidationError,
   RELEASE_CHANNELS,
   RELEASE_PLATFORMS,
+  assertAuthReadyBoundaryCoverage,
   assertProcedureSecurityCoverage,
   assertTypedApiContractCoverage,
   apiProcedureContracts,
+  listPrivateApiProcedures,
   listPublicApiProcedures,
+  privateApiProcedureContracts,
+  privateProcedureSecurityPolicies,
   publicProcedureSecurityPolicies,
   validateApiContractInput,
   validateApiContractOutput,
@@ -88,6 +93,118 @@ describe("API contract security policies", () => {
         apiProcedureContracts[procedure].inputSchema
       );
     }
+  });
+
+  it("keeps reserved private procedures outside the shipped public API", () => {
+    assert.equal(API_AUTH_BOUNDARY_CONTRACT_VERSION, "0.1.0");
+    assert.equal(assertAuthReadyBoundaryCoverage(), true);
+    assert.deepEqual(listPrivateApiProcedures(), [
+      "account.profile",
+      "devices.register",
+      "licenses.status"
+    ]);
+    assert.deepEqual(listPrivateApiProcedures(apiProcedureContracts), []);
+
+    for (const procedure of listPrivateApiProcedures()) {
+      assert.equal(apiProcedureContracts[procedure], undefined);
+      assert.equal(publicProcedureSecurityPolicies[procedure], undefined);
+      assert.equal(privateApiProcedureContracts[procedure].visibility, "private");
+      assert.equal(privateProcedureSecurityPolicies[procedure].auth.required, true);
+      assert.equal(privateProcedureSecurityPolicies[procedure].errorRedaction, "private");
+    }
+
+    assert.throws(
+      () =>
+        validateSecurityEnvelope({
+          payload: {
+            appVersion: "0.1.0",
+            deviceId: "device:abc123",
+            installId: "install:abc123"
+          },
+          procedure: "devices.register",
+          requestId: "req_12345678"
+        }),
+      (error) =>
+        error instanceof ContractValidationError &&
+        error.issues.some(
+          (issue) => issue.code === "unknown_procedure" && issue.path.join(".") === "procedure"
+        )
+    );
+  });
+
+  it("requires future private contracts to stay auth-gated and separate", () => {
+    assert.deepEqual(
+      validateApiContractInput(
+        "devices.register",
+        {
+          appVersion: "0.1.0",
+          channel: "beta",
+          deviceId: "device:abc123",
+          installId: "install:abc123"
+        },
+        privateApiProcedureContracts
+      ),
+      {
+        appVersion: "0.1.0",
+        channel: "beta",
+        deviceId: "device:abc123",
+        installId: "install:abc123"
+      }
+    );
+    assert.deepEqual(
+      validateApiContractOutput(
+        "licenses.status",
+        {
+          canSyncBenchmarks: true,
+          plan: "pro",
+          status: "active"
+        },
+        privateApiProcedureContracts
+      ),
+      {
+        canSyncBenchmarks: true,
+        plan: "pro",
+        status: "active"
+      }
+    );
+
+    assert.throws(
+      () =>
+        assertAuthReadyBoundaryCoverage(
+          {
+            ...apiProcedureContracts,
+            "devices.register": privateApiProcedureContracts["devices.register"]
+          },
+          privateApiProcedureContracts,
+          publicProcedureSecurityPolicies,
+          privateProcedureSecurityPolicies
+        ),
+      (error) =>
+        error instanceof ContractValidationError &&
+        error.issues.some((issue) => issue.code === "private_procedure_exposed")
+    );
+
+    assert.throws(
+      () =>
+        assertAuthReadyBoundaryCoverage(
+          apiProcedureContracts,
+          privateApiProcedureContracts,
+          publicProcedureSecurityPolicies,
+          {
+            ...privateProcedureSecurityPolicies,
+            "devices.register": {
+              ...privateProcedureSecurityPolicies["devices.register"],
+              auth: {
+                required: false,
+                scopes: []
+              }
+            }
+          }
+        ),
+      (error) =>
+        error instanceof ContractValidationError &&
+        error.issues.some((issue) => issue.code === "missing_auth_requirement")
+    );
   });
 
   it("validates known procedure input and returns its policy", () => {

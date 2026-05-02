@@ -1,11 +1,27 @@
 export const API_SECURITY_CONTRACT_VERSION = "0.1.0";
+export const API_AUTH_BOUNDARY_CONTRACT_VERSION = "0.1.0";
 export const API_TRPC_CONTRACT_VERSION = "0.2.0";
 export const API_TRPC_PATH = "/trpc";
 export const RELEASE_CHANNELS = deepFreeze(["dev", "beta", "stable"]);
 export const RELEASE_PLATFORMS = deepFreeze(["windows-x64"]);
+export const RESERVED_PRIVATE_AUTH_SCOPES = deepFreeze([
+  "account:read",
+  "devices:write",
+  "licenses:read"
+]);
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const PROCEDURE_NAME_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/;
+const PRIVATE_LOG_FIELD_DENY_LIST = new Set([
+  "authorization",
+  "cookie",
+  "databaseUrl",
+  "neonUrl",
+  "payload",
+  "rawPayload",
+  "sessionToken",
+  "token"
+]);
 const emptyInputSchema = objectSchema({});
 const releaseChannelSchema = enumSchema(RELEASE_CHANNELS);
 const releasePlatformSchema = enumSchema(RELEASE_PLATFORMS);
@@ -139,6 +155,32 @@ const featureFlagsEvaluateOutputSchema = objectSchema({
   evaluations: arraySchema(featureFlagEvaluationSchema, { maxLength: 64, minLength: 1 }),
   version: requiredStringSchema({ maxLength: 32 })
 });
+const accountProfileInputSchema = objectSchema({});
+const accountProfileOutputSchema = objectSchema({
+  accountId: requiredStringSchema({ maxLength: 128 }),
+  displayName: optionalStringSchema({ maxLength: 96 }),
+  licenseStatus: enumSchema(["active", "inactive", "trial", "unknown"])
+});
+const deviceRegisterInputSchema = objectSchema({
+  appVersion: requiredStringSchema({ maxLength: 64 }),
+  channel: optionalEnumSchema(RELEASE_CHANNELS),
+  deviceId: requiredStringSchema({ maxLength: 128 }),
+  installId: requiredStringSchema({ maxLength: 128 })
+});
+const deviceRegisterOutputSchema = objectSchema({
+  deviceId: requiredStringSchema({ maxLength: 128 }),
+  linked: booleanSchema(),
+  profileId: optionalStringSchema({ maxLength: 128 })
+});
+const licenseStatusInputSchema = objectSchema({
+  deviceId: optionalStringSchema({ maxLength: 128 })
+});
+const licenseStatusOutputSchema = objectSchema({
+  canSyncBenchmarks: booleanSchema(),
+  expiresAtUtc: optionalStringSchema({ maxLength: 40 }),
+  plan: enumSchema(["free", "pro", "team", "unknown"]),
+  status: enumSchema(["active", "inactive", "trial", "unknown"])
+});
 
 export class ContractValidationError extends Error {
   constructor(message, issues = []) {
@@ -230,6 +272,63 @@ export const publicProcedureSecurityPolicies = deepFreeze({
   }
 });
 
+export const privateProcedureSecurityPolicies = deepFreeze({
+  "account.profile": {
+    auth: {
+      required: true,
+      scopes: ["account:read"],
+      strategy: "future-session-or-device-attestation"
+    },
+    errorRedaction: "private",
+    inputSchema: accountProfileInputSchema,
+    logging: {
+      audit: true,
+      fields: ["requestId", "procedure", "statusCode", "durationMs", "principalHash"]
+    },
+    rateLimit: {
+      key: "principal",
+      max: 60,
+      windowMs: 60_000
+    }
+  },
+  "devices.register": {
+    auth: {
+      required: true,
+      scopes: ["devices:write"],
+      strategy: "future-session-or-device-attestation"
+    },
+    errorRedaction: "private",
+    inputSchema: deviceRegisterInputSchema,
+    logging: {
+      audit: true,
+      fields: ["requestId", "procedure", "statusCode", "durationMs", "principalHash"]
+    },
+    rateLimit: {
+      key: "principal",
+      max: 20,
+      windowMs: 60_000
+    }
+  },
+  "licenses.status": {
+    auth: {
+      required: true,
+      scopes: ["licenses:read"],
+      strategy: "future-session-or-device-attestation"
+    },
+    errorRedaction: "private",
+    inputSchema: licenseStatusInputSchema,
+    logging: {
+      audit: true,
+      fields: ["requestId", "procedure", "statusCode", "durationMs", "principalHash"]
+    },
+    rateLimit: {
+      key: "principal",
+      max: 60,
+      windowMs: 60_000
+    }
+  }
+});
+
 export const apiProcedureContracts = deepFreeze({
   "catalog.latest": {
     description: "Read the latest signed tweak catalog metadata for a release channel.",
@@ -278,6 +377,33 @@ export const apiProcedureContracts = deepFreeze({
     outputSchema: systemHealthOutputSchema,
     path: API_TRPC_PATH,
     visibility: "public"
+  }
+});
+
+export const privateApiProcedureContracts = deepFreeze({
+  "account.profile": {
+    description: "Reserved authenticated account profile contract for a future auth change.",
+    inputSchema: accountProfileInputSchema,
+    kind: "query",
+    outputSchema: accountProfileOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "private"
+  },
+  "devices.register": {
+    description: "Reserved authenticated device linking contract for a future auth change.",
+    inputSchema: deviceRegisterInputSchema,
+    kind: "mutation",
+    outputSchema: deviceRegisterOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "private"
+  },
+  "licenses.status": {
+    description: "Reserved authenticated entitlement status contract for a future auth change.",
+    inputSchema: licenseStatusInputSchema,
+    kind: "query",
+    outputSchema: licenseStatusOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "private"
   }
 });
 
@@ -354,6 +480,13 @@ export function listPublicApiProcedures(contracts = apiProcedureContracts) {
     .sort();
 }
 
+export function listPrivateApiProcedures(contracts = privateApiProcedureContracts) {
+  return Object.entries(contracts)
+    .filter(([, contract]) => contract.visibility === "private")
+    .map(([procedure]) => procedure)
+    .sort();
+}
+
 export function getApiProcedureContract(procedure, contracts = apiProcedureContracts) {
   const contract = contracts[procedure];
 
@@ -424,6 +557,101 @@ export function assertTypedApiContractCoverage(
 
   if (issues.length > 0) {
     throw new ContractValidationError("Typed API contract coverage failed", issues);
+  }
+
+  return true;
+}
+
+export function assertAuthReadyBoundaryCoverage(
+  publicContracts = apiProcedureContracts,
+  privateContracts = privateApiProcedureContracts,
+  publicPolicies = publicProcedureSecurityPolicies,
+  privatePolicies = privateProcedureSecurityPolicies
+) {
+  const issues = [];
+  const publicNames = new Set(Object.keys(publicContracts));
+
+  for (const [procedure, contract] of Object.entries(publicContracts)) {
+    if (contract.visibility !== "public") {
+      issues.push(issue([procedure, "visibility"], "invalid_visibility", "public"));
+    }
+  }
+
+  for (const [procedure, contract] of Object.entries(privateContracts)) {
+    const policy = privatePolicies[procedure];
+
+    if (publicNames.has(procedure) || publicPolicies[procedure]) {
+      issues.push(issue([procedure], "private_procedure_exposed", "private-only contract"));
+    }
+
+    if (!PROCEDURE_NAME_PATTERN.test(procedure)) {
+      issues.push(issue([procedure], "invalid_procedure_name", "dot-separated procedure name"));
+    }
+
+    if (contract.visibility !== "private") {
+      issues.push(issue([procedure, "visibility"], "invalid_visibility", "private"));
+    }
+
+    if (!["query", "mutation"].includes(contract.kind)) {
+      issues.push(issue([procedure, "kind"], "invalid_kind", "query | mutation"));
+    }
+
+    if (contract.path !== API_TRPC_PATH) {
+      issues.push(issue([procedure, "path"], "invalid_trpc_path", API_TRPC_PATH));
+    }
+
+    if (!contract.inputSchema || typeof contract.inputSchema.parse !== "function") {
+      issues.push(issue([procedure, "inputSchema"], "missing_validation", "input schema parser"));
+    }
+
+    if (!contract.outputSchema || typeof contract.outputSchema.parse !== "function") {
+      issues.push(issue([procedure, "outputSchema"], "missing_validation", "output schema parser"));
+    }
+
+    if (!policy) {
+      issues.push(issue([procedure], "missing_private_policy", "private procedure security policy"));
+      continue;
+    }
+
+    if (policy.inputSchema !== contract.inputSchema) {
+      issues.push(issue([procedure, "inputSchema"], "contract_policy_mismatch", "shared input schema"));
+    }
+
+    if (policy.errorRedaction !== "private") {
+      issues.push(issue([procedure, "errorRedaction"], "invalid_error_redaction", "private"));
+    }
+
+    if (policy.auth?.required !== true) {
+      issues.push(issue([procedure, "auth"], "missing_auth_requirement", "required future auth gate"));
+    }
+
+    if (!Array.isArray(policy.auth?.scopes) || policy.auth.scopes.length === 0) {
+      issues.push(issue([procedure, "auth", "scopes"], "missing_auth_scope", "at least one private scope"));
+    }
+
+    if (!policy.rateLimit || policy.rateLimit.key !== "principal") {
+      issues.push(issue([procedure, "rateLimit"], "invalid_private_rate_limit", "principal-scoped limit"));
+    }
+
+    if (!policy.logging || !Array.isArray(policy.logging.fields) || policy.logging.fields.length === 0) {
+      issues.push(issue([procedure, "logging"], "missing_logging_policy", "least-privilege fields"));
+    } else {
+      for (const field of policy.logging.fields) {
+        if (PRIVATE_LOG_FIELD_DENY_LIST.has(field)) {
+          issues.push(issue([procedure, "logging", field], "unsafe_private_log_field", "redacted metadata only"));
+        }
+      }
+    }
+  }
+
+  for (const procedure of Object.keys(privatePolicies)) {
+    if (!privateContracts[procedure]) {
+      issues.push(issue([procedure], "missing_private_contract", "private API procedure contract"));
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new ContractValidationError("Auth-ready API boundary coverage failed", issues);
   }
 
   return true;
