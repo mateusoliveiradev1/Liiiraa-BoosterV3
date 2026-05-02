@@ -8,6 +8,40 @@ import {
 } from "../src/index.js";
 
 describe("API contract security policies", () => {
+  const benchmarkSyncPayload = {
+    consent: {
+      benchmarkSync: true
+    },
+    session: {
+      activeOptimizerProfile: "Safe",
+      activePowerPlan: "Liiiraa Balanced",
+      captures: [
+        {
+          averageFps: 182.4,
+          capturedAtUtc: "2026-04-30T12:02:00Z",
+          delayedFrames: 1,
+          droppedFrames: 2,
+          frametimeP50Ms: 5.4,
+          frametimeP95Ms: 8.2,
+          frametimeP99Ms: 11.8,
+          generatedFramesDetected: false,
+          id: "capture:before:001",
+          latencyProxy: true,
+          measurementSource: "presentmon-render-present",
+          onePercentLowFps: 122,
+          phase: "before",
+          zeroPointOnePercentLowFps: 91.5
+        }
+      ],
+      createdAtUtc: "2026-04-30T12:03:00Z",
+      driverVersion: "551.86",
+      game: "PUBG",
+      id: "bench:session:pubg:001",
+      sessionLabel: "Training route",
+      windowsBuild: "22631.3527"
+    }
+  };
+
   it("requires every public procedure to define baseline controls", () => {
     assert.equal(assertProcedureSecurityCoverage(), true);
 
@@ -39,6 +73,45 @@ describe("API contract security policies", () => {
       clientVersion: "0.1.0"
     });
     assert.equal(envelope.policy, publicProcedureSecurityPolicies["catalog.latest"]);
+  });
+
+  it("validates the benchmark sync procedure with consent and aggregate metrics only", () => {
+    const envelope = validateSecurityEnvelope({
+      payload: benchmarkSyncPayload,
+      procedure: "benchmarks.sync",
+      requestId: "req_12345678"
+    });
+
+    assert.equal(envelope.payload.consent.benchmarkSync, true);
+    assert.equal(envelope.payload.session.captures[0].phase, "before");
+    assert.equal(envelope.policy, publicProcedureSecurityPolicies["benchmarks.sync"]);
+
+    assert.throws(
+      () =>
+        validateSecurityEnvelope({
+          payload: {
+            ...benchmarkSyncPayload,
+            session: {
+              ...benchmarkSyncPayload.session,
+              captures: [
+                {
+                  ...benchmarkSyncPayload.session.captures[0],
+                  rawCsvPath: "C:\\Users\\liiiraa\\captures\\session.csv"
+                }
+              ]
+            }
+          },
+          procedure: "benchmarks.sync",
+          requestId: "req_12345678"
+        }),
+      (error) =>
+        error instanceof ContractValidationError &&
+        error.issues.some(
+          (issue) =>
+            issue.code === "unknown_key" &&
+            issue.path.join(".") === "payload.session.captures.0.rawCsvPath"
+        )
+    );
   });
 
   it("denies unknown procedures and extra payload keys", () => {

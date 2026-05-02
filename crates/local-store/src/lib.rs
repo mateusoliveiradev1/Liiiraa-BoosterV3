@@ -1,7 +1,11 @@
 //! SQLite local persistence for optimizer history, audit events, pending sync,
 //! and benchmark captures.
 
-use std::{error, fmt, path::Path};
+use std::{
+    error,
+    fmt::{self, Write as _},
+    path::Path,
+};
 
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
@@ -13,6 +17,12 @@ pub const PUBG_CONFIG_SNAPSHOT_TYPE: &str = "pubg.config";
 
 /// Payload schema version for PUBG config snapshots.
 pub const PUBG_CONFIG_SNAPSHOT_SCHEMA_VERSION: &str = "pubg-config-v1";
+
+/// Pending sync record kind for benchmark session cloud sync.
+pub const BENCHMARK_SESSION_SYNC_RECORD_KIND: &str = "benchmark_session";
+
+/// Payload schema version for minimized benchmark session sync payloads.
+pub const BENCHMARK_SESSION_SYNC_SCHEMA_VERSION: &str = "benchmark-session-sync-v1";
 
 /// Initial schema for local optimizer persistence.
 pub const MIGRATION_001: &str = r#"
@@ -358,6 +368,41 @@ impl LocalStore {
         Ok(())
     }
 
+    /// Builds and queues a minimized benchmark-session sync payload after consent.
+    pub fn enqueue_benchmark_session_sync(
+        &self,
+        request: &BenchmarkSessionSyncRequest,
+        consent: SyncConsent,
+    ) -> LocalStoreResult<PendingSyncItem> {
+        if consent != SyncConsent::Granted {
+            return Err(LocalStoreError::consent_required("benchmark_session_sync"));
+        }
+
+        validate_benchmark_session_sync_request(request)?;
+        let captures = self.benchmark_captures(&request.session_id)?;
+        if captures.is_empty() {
+            return Err(LocalStoreError::invalid_value(
+                "session_id",
+                "benchmark session has no captures to sync",
+            ));
+        }
+
+        let item = PendingSyncItem {
+            id: request.id.clone(),
+            record_kind: BENCHMARK_SESSION_SYNC_RECORD_KIND.to_owned(),
+            record_id: request.session_id.clone(),
+            created_at_utc: request.created_at_utc.clone(),
+            consent_granted_at_utc: request.consent_granted_at_utc.clone(),
+            payload_json: benchmark_session_sync_payload_json(&request.session_id, &captures),
+            attempts: 0,
+            next_attempt_at_utc: None,
+            last_error: None,
+        };
+
+        self.enqueue_pending_sync(&item, SyncConsent::Granted)?;
+        Ok(item)
+    }
+
     /// Lists queued sync items in creation order.
     pub fn pending_sync_items(&self) -> LocalStoreResult<Vec<PendingSyncItem>> {
         let mut statement = self.connection.prepare(
@@ -488,6 +533,19 @@ pub struct BenchmarkCapture {
     pub generated_frames_detected: bool,
     /// Whether latency values are only a proxy rather than true end-to-end latency.
     pub latency_proxy: bool,
+}
+
+/// Request to queue one stored benchmark session for cloud sync.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BenchmarkSessionSyncRequest {
+    /// Stable pending sync item ID.
+    pub id: String,
+    /// Stored benchmark session ID to sync.
+    pub session_id: String,
+    /// UTC timestamp when the queue item was created.
+    pub created_at_utc: String,
+    /// UTC timestamp when benchmark sync consent was granted.
+    pub consent_granted_at_utc: String,
 }
 
 /// Local queue item waiting for consent-approved cloud sync.
@@ -753,6 +811,113 @@ fn validate_pending_sync(item: &PendingSyncItem) -> LocalStoreResult<()> {
     Ok(())
 }
 
+fn validate_benchmark_session_sync_request(
+    request: &BenchmarkSessionSyncRequest,
+) -> LocalStoreResult<()> {
+    validate_identifier("id", &request.id)?;
+    validate_identifier("session_id", &request.session_id)?;
+    validate_required("created_at_utc", &request.created_at_utc)?;
+    validate_required("consent_granted_at_utc", &request.consent_granted_at_utc)
+}
+
+fn benchmark_session_sync_payload_json(
+    session_id: &str,
+    captures: &[BenchmarkCapture],
+) -> String {
+    let captures_json = captures
+        .iter()
+        .map(benchmark_capture_sync_json)
+        .collect::<Vec<_>>()
+        .join(",");
+
+    format!(
+        "{{\"schemaVersion\":{},\"kind\":\"benchmark-session\",\"sessionId\":{},\"captures\":[{}]}}",
+        json_string(BENCHMARK_SESSION_SYNC_SCHEMA_VERSION),
+        json_string(session_id),
+        captures_json
+    )
+}
+
+fn benchmark_capture_sync_json(capture: &BenchmarkCapture) -> String {
+    format!(
+        concat!(
+            "{{",
+            "\"id\":{},",
+            "\"phase\":{},",
+            "\"capturedAtUtc\":{},",
+            "\"game\":{},",
+            "\"windowsBuild\":{},",
+            "\"driverVersion\":{},",
+            "\"activePowerPlan\":{},",
+            "\"activeOptimizerProfile\":{},",
+            "\"measurementSource\":{},",
+            "\"metrics\":{{",
+            "\"averageFps\":{},",
+            "\"onePercentLowFps\":{},",
+            "\"zeroPointOnePercentLowFps\":{},",
+            "\"frametimeP50Ms\":{},",
+            "\"frametimeP95Ms\":{},",
+            "\"frametimeP99Ms\":{},",
+            "\"droppedFrames\":{},",
+            "\"delayedFrames\":{}",
+            "}},",
+            "\"generatedFramesDetected\":{},",
+            "\"latencyProxy\":{}",
+            "}}"
+        ),
+        json_string(&capture.id),
+        json_string(capture.phase.as_str()),
+        json_string(&capture.captured_at_utc),
+        json_string(&capture.game),
+        json_string(&capture.windows_build),
+        json_string(&capture.driver_version),
+        json_string(&capture.active_power_plan),
+        json_string(&capture.active_optimizer_profile),
+        json_string(&capture.measurement_source),
+        capture.metrics.average_fps,
+        capture.metrics.one_percent_low_fps,
+        capture.metrics.zero_point_one_percent_low_fps,
+        capture.metrics.frametime_p50_ms,
+        capture.metrics.frametime_p95_ms,
+        capture.metrics.frametime_p99_ms,
+        capture.metrics.dropped_frames,
+        capture.metrics.delayed_frames,
+        bool_to_json(capture.generated_frames_detected),
+        bool_to_json(capture.latency_proxy)
+    )
+}
+
+fn json_string(value: &str) -> String {
+    let mut output = String::with_capacity(value.len() + 2);
+    output.push('"');
+
+    for character in value.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            character if character.is_control() => {
+                write!(&mut output, "\\u{:04x}", character as u32)
+                    .expect("writing to String cannot fail");
+            }
+            character => output.push(character),
+        }
+    }
+
+    output.push('"');
+    output
+}
+
+fn bool_to_json(value: bool) -> &'static str {
+    if value {
+        "true"
+    } else {
+        "false"
+    }
+}
+
 fn validate_metrics(metrics: &BenchmarkMetrics) -> LocalStoreResult<()> {
     validate_non_negative_number("average_fps", metrics.average_fps)?;
     validate_non_negative_number("one_percent_low_fps", metrics.one_percent_low_fps)?;
@@ -930,6 +1095,15 @@ mod tests {
         }
     }
 
+    fn benchmark_session_sync_request() -> BenchmarkSessionSyncRequest {
+        BenchmarkSessionSyncRequest {
+            id: "sync:bench-session:001".to_owned(),
+            session_id: "bench:session:pubg:001".to_owned(),
+            created_at_utc: "2026-04-30T12:04:00Z".to_owned(),
+            consent_granted_at_utc: "2026-04-30T12:00:00Z".to_owned(),
+        }
+    }
+
     #[test]
     fn migration_creates_required_schema() {
         let store = LocalStore::open_in_memory().expect("store should open");
@@ -1050,6 +1224,54 @@ mod tests {
         store
             .enqueue_pending_sync(&item, SyncConsent::Granted)
             .expect("consented sync should queue");
+
+        let queued = store
+            .pending_sync_items()
+            .expect("pending sync should be readable");
+        assert_eq!(queued, vec![item]);
+    }
+
+    #[test]
+    fn queues_benchmark_session_sync_from_stored_captures_after_consent() {
+        let store = LocalStore::open_in_memory().expect("store should open");
+        let request = benchmark_session_sync_request();
+
+        store
+            .insert_benchmark_capture(&benchmark_capture(
+                "capture:before:001",
+                BenchmarkPhase::Before,
+            ))
+            .expect("before benchmark should be stored");
+        store
+            .insert_benchmark_capture(&benchmark_capture(
+                "capture:after:001",
+                BenchmarkPhase::After,
+            ))
+            .expect("after benchmark should be stored");
+
+        let error = store
+            .enqueue_benchmark_session_sync(&request, SyncConsent::Denied)
+            .expect_err("benchmark sync should require consent");
+        assert_eq!(error.reason(), LocalStoreErrorReason::ConsentRequired);
+
+        let item = store
+            .enqueue_benchmark_session_sync(&request, SyncConsent::Granted)
+            .expect("consented benchmark session should queue");
+
+        assert_eq!(item.record_kind, BENCHMARK_SESSION_SYNC_RECORD_KIND);
+        assert_eq!(item.record_id, request.session_id);
+        assert_eq!(item.consent_granted_at_utc, "2026-04-30T12:00:00Z");
+        assert!(item
+            .payload_json
+            .contains("\"schemaVersion\":\"benchmark-session-sync-v1\""));
+        assert!(item
+            .payload_json
+            .contains("\"sessionId\":\"bench:session:pubg:001\""));
+        assert!(item.payload_json.contains("\"phase\":\"before\""));
+        assert!(item.payload_json.contains("\"phase\":\"after\""));
+        assert!(item
+            .payload_json
+            .contains("\"measurementSource\":\"presentmon-render-present\""));
 
         let queued = store
             .pending_sync_items()

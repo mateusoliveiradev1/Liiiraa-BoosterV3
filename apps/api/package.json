@@ -15,6 +15,7 @@
   },
   "exports": {
     ".": "./src/index.js",
+    "./benchmark-sync": "./src/benchmark-sync.js",
     "./config": "./src/config.js",
     "./security-baseline": "./src/security-baseline.js"
   }

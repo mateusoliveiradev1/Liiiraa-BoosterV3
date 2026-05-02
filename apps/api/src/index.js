@@ -24,3 +24,12 @@ export {
   privacyConsentRequirements,
   requireApiPrivacyConsent
 } from "./privacy-consent.js";
+export {
+  API_BENCHMARK_SYNC_VERSION,
+  BENCHMARK_SYNC_PROCEDURE,
+  assertApiBenchmarkSyncCoverage,
+  createBenchmarkSessionSyncDecision,
+  createBenchmarkSessionSyncPayload,
+  requireBenchmarkSessionCloudSync,
+  validateBenchmarkSyncEnvelope
+} from "./benchmark-sync.js";

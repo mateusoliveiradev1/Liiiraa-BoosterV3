@@ -2,6 +2,38 @@ export const API_SECURITY_CONTRACT_VERSION = "0.1.0";
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const PROCEDURE_NAME_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/;
+const benchmarkSyncConsentSchema = objectSchema({
+  benchmarkSync: optionalBooleanSchema(),
+  crashReports: optionalBooleanSchema(),
+  telemetry: optionalBooleanSchema()
+});
+const benchmarkSyncCaptureSchema = objectSchema({
+  averageFps: numberSchema({ min: 0 }),
+  capturedAtUtc: requiredStringSchema({ maxLength: 40 }),
+  delayedFrames: integerSchema({ min: 0 }),
+  droppedFrames: integerSchema({ min: 0 }),
+  frametimeP50Ms: numberSchema({ min: 0 }),
+  frametimeP95Ms: numberSchema({ min: 0 }),
+  frametimeP99Ms: numberSchema({ min: 0 }),
+  generatedFramesDetected: booleanSchema(),
+  id: requiredStringSchema({ maxLength: 128 }),
+  latencyProxy: booleanSchema(),
+  measurementSource: requiredStringSchema({ maxLength: 96 }),
+  onePercentLowFps: numberSchema({ min: 0 }),
+  phase: enumSchema(["before", "after", "single"]),
+  zeroPointOnePercentLowFps: numberSchema({ min: 0 })
+});
+const benchmarkSyncSessionSchema = objectSchema({
+  activeOptimizerProfile: requiredStringSchema({ maxLength: 96 }),
+  activePowerPlan: requiredStringSchema({ maxLength: 96 }),
+  captures: arraySchema(benchmarkSyncCaptureSchema, { maxLength: 12, minLength: 1 }),
+  createdAtUtc: requiredStringSchema({ maxLength: 40 }),
+  driverVersion: requiredStringSchema({ maxLength: 64 }),
+  game: requiredStringSchema({ maxLength: 64 }),
+  id: requiredStringSchema({ maxLength: 128 }),
+  sessionLabel: optionalStringSchema({ maxLength: 96 }),
+  windowsBuild: requiredStringSchema({ maxLength: 64 })
+});
 
 export class ContractValidationError extends Error {
   constructor(message, issues = []) {
@@ -26,6 +58,22 @@ export const publicProcedureSecurityPolicies = deepFreeze({
     rateLimit: {
       key: "ip",
       max: 30,
+      windowMs: 60_000
+    }
+  },
+  "benchmarks.sync": {
+    errorRedaction: "public",
+    inputSchema: objectSchema({
+      consent: benchmarkSyncConsentSchema,
+      session: benchmarkSyncSessionSchema
+    }),
+    logging: {
+      audit: true,
+      fields: ["requestId", "procedure", "origin", "statusCode", "durationMs"]
+    },
+    rateLimit: {
+      key: "ip",
+      max: 15,
       windowMs: 60_000
     }
   },
@@ -156,6 +204,34 @@ export function optionalBooleanSchema() {
   };
 }
 
+export function booleanSchema() {
+  return {
+    parse(value, path = [], issues = []) {
+      if (typeof value !== "boolean") {
+        issues.push(issue(path, "invalid_type", "boolean"));
+        return undefined;
+      }
+
+      return value;
+    }
+  };
+}
+
+export function enumSchema(values) {
+  const allowed = new Set(values);
+
+  return {
+    parse(value, path = [], issues = []) {
+      if (!allowed.has(value)) {
+        issues.push(issue(path, "invalid_enum", values.join(" | ")));
+        return undefined;
+      }
+
+      return value;
+    }
+  };
+}
+
 export function optionalEnumSchema(values) {
   const allowed = new Set(values);
 
@@ -171,6 +247,27 @@ export function optionalEnumSchema(values) {
       }
 
       return value;
+    }
+  };
+}
+
+export function requiredStringSchema(options = {}) {
+  const maxLength = options.maxLength ?? 256;
+
+  return {
+    parse(value, path = [], issues = []) {
+      if (typeof value !== "string") {
+        issues.push(issue(path, "invalid_type", "string"));
+        return undefined;
+      }
+
+      const trimmed = value.trim();
+      if (trimmed.length === 0 || trimmed.length > maxLength) {
+        issues.push(issue(path, "invalid_length", `1-${maxLength} characters`));
+        return undefined;
+      }
+
+      return trimmed;
     }
   };
 }
@@ -196,6 +293,63 @@ export function optionalStringSchema(options = {}) {
       }
 
       return trimmed;
+    }
+  };
+}
+
+export function numberSchema(options = {}) {
+  return {
+    parse(value, path = [], issues = []) {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        issues.push(issue(path, "invalid_type", "finite number"));
+        return undefined;
+      }
+
+      if (options.min !== undefined && value < options.min) {
+        issues.push(issue(path, "invalid_range", `>= ${options.min}`));
+        return undefined;
+      }
+
+      return value;
+    }
+  };
+}
+
+export function integerSchema(options = {}) {
+  return {
+    parse(value, path = [], issues = []) {
+      if (!Number.isInteger(value)) {
+        issues.push(issue(path, "invalid_type", "integer"));
+        return undefined;
+      }
+
+      if (options.min !== undefined && value < options.min) {
+        issues.push(issue(path, "invalid_range", `>= ${options.min}`));
+        return undefined;
+      }
+
+      return value;
+    }
+  };
+}
+
+export function arraySchema(elementSchema, options = {}) {
+  const minLength = options.minLength ?? 0;
+  const maxLength = options.maxLength ?? Number.POSITIVE_INFINITY;
+
+  return {
+    parse(value, path = [], issues = []) {
+      if (!Array.isArray(value)) {
+        issues.push(issue(path, "invalid_type", "array"));
+        return undefined;
+      }
+
+      if (value.length < minLength || value.length > maxLength) {
+        issues.push(issue(path, "invalid_length", `${minLength}-${maxLength} items`));
+        return undefined;
+      }
+
+      return value.map((item, index) => elementSchema.parse(item, [...path, index], issues));
     }
   };
 }
