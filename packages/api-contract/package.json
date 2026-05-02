@@ -8,7 +8,7 @@
     "check": "node --test tests/*.test.mjs",
     "lint": "node --test tests/*.test.mjs",
     "test": "node --test tests/*.test.mjs",
-    "typecheck": "node -e \"console.log('API contract runtime schemas are covered by node:test until TypeScript generation lands')\""
+    "typecheck": "tsc -p tsconfig.json"
   },
   "exports": {
     ".": "./src/index.js"

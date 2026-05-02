@@ -1,7 +1,29 @@
 export const API_SECURITY_CONTRACT_VERSION = "0.1.0";
+export const API_TRPC_CONTRACT_VERSION = "0.1.0";
+export const API_TRPC_PATH = "/trpc";
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const PROCEDURE_NAME_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/;
+const catalogLatestInputSchema = objectSchema({
+  channel: optionalEnumSchema(["dev", "beta", "stable"]),
+  clientVersion: optionalStringSchema({ maxLength: 64 })
+});
+const catalogLatestOutputSchema = objectSchema({
+  catalogVersion: requiredStringSchema({ maxLength: 96 }),
+  channel: enumSchema(["dev", "beta", "stable"]),
+  minimumAppVersion: optionalStringSchema({ maxLength: 64 }),
+  publishedAtUtc: requiredStringSchema({ maxLength: 40 })
+});
+const systemHealthInputSchema = objectSchema({
+  includeBuild: optionalBooleanSchema()
+});
+const systemHealthOutputSchema = objectSchema({
+  build: optionalStringSchema({ maxLength: 96 }),
+  ok: booleanSchema(),
+  service: requiredStringSchema({ maxLength: 64 }),
+  uptimeMs: integerSchema({ min: 0 }),
+  version: requiredStringSchema({ maxLength: 32 })
+});
 const benchmarkSyncConsentSchema = objectSchema({
   benchmarkSync: optionalBooleanSchema(),
   crashReports: optionalBooleanSchema(),
@@ -34,6 +56,16 @@ const benchmarkSyncSessionSchema = objectSchema({
   sessionLabel: optionalStringSchema({ maxLength: 96 }),
   windowsBuild: requiredStringSchema({ maxLength: 64 })
 });
+const benchmarkSyncOutputSchema = objectSchema({
+  accepted: booleanSchema(),
+  requestId: requiredStringSchema({ maxLength: 128 }),
+  statusCode: integerSchema({ min: 100 }),
+  version: requiredStringSchema({ maxLength: 32 })
+});
+const benchmarkSyncInputSchema = objectSchema({
+  consent: benchmarkSyncConsentSchema,
+  session: benchmarkSyncSessionSchema
+});
 
 export class ContractValidationError extends Error {
   constructor(message, issues = []) {
@@ -47,10 +79,7 @@ export class ContractValidationError extends Error {
 export const publicProcedureSecurityPolicies = deepFreeze({
   "catalog.latest": {
     errorRedaction: "public",
-    inputSchema: objectSchema({
-      channel: optionalEnumSchema(["dev", "beta", "stable"]),
-      clientVersion: optionalStringSchema({ maxLength: 64 })
-    }),
+    inputSchema: catalogLatestInputSchema,
     logging: {
       audit: true,
       fields: ["requestId", "procedure", "origin", "statusCode", "durationMs", "remoteAddressHash"]
@@ -63,10 +92,7 @@ export const publicProcedureSecurityPolicies = deepFreeze({
   },
   "benchmarks.sync": {
     errorRedaction: "public",
-    inputSchema: objectSchema({
-      consent: benchmarkSyncConsentSchema,
-      session: benchmarkSyncSessionSchema
-    }),
+    inputSchema: benchmarkSyncInputSchema,
     logging: {
       audit: true,
       fields: ["requestId", "procedure", "origin", "statusCode", "durationMs"]
@@ -79,9 +105,7 @@ export const publicProcedureSecurityPolicies = deepFreeze({
   },
   "system.health": {
     errorRedaction: "public",
-    inputSchema: objectSchema({
-      includeBuild: optionalBooleanSchema()
-    }),
+    inputSchema: systemHealthInputSchema,
     logging: {
       audit: false,
       fields: ["requestId", "procedure", "origin", "statusCode"]
@@ -91,6 +115,33 @@ export const publicProcedureSecurityPolicies = deepFreeze({
       max: 60,
       windowMs: 60_000
     }
+  }
+});
+
+export const apiProcedureContracts = deepFreeze({
+  "catalog.latest": {
+    description: "Read the latest signed tweak catalog metadata for a release channel.",
+    inputSchema: catalogLatestInputSchema,
+    kind: "query",
+    outputSchema: catalogLatestOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "public"
+  },
+  "benchmarks.sync": {
+    description: "Sync an aggregate benchmark session only after explicit consent.",
+    inputSchema: benchmarkSyncInputSchema,
+    kind: "mutation",
+    outputSchema: benchmarkSyncOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "public"
+  },
+  "system.health": {
+    description: "Report API liveness without exposing infrastructure secrets.",
+    inputSchema: systemHealthInputSchema,
+    kind: "query",
+    outputSchema: systemHealthOutputSchema,
+    path: API_TRPC_PATH,
+    visibility: "public"
   }
 });
 
@@ -158,6 +209,99 @@ export function assertProcedureSecurityCoverage(policies = publicProcedureSecuri
   }
 
   return true;
+}
+
+export function listPublicApiProcedures(contracts = apiProcedureContracts) {
+  return Object.entries(contracts)
+    .filter(([, contract]) => contract.visibility === "public")
+    .map(([procedure]) => procedure)
+    .sort();
+}
+
+export function getApiProcedureContract(procedure, contracts = apiProcedureContracts) {
+  const contract = contracts[procedure];
+
+  if (!contract) {
+    throw new ContractValidationError("Unknown API procedure contract", [
+      issue(["procedure"], "unknown_procedure", "registered API procedure contract")
+    ]);
+  }
+
+  return contract;
+}
+
+export function validateApiContractInput(procedure, payload = {}, contracts = apiProcedureContracts) {
+  const contract = getApiProcedureContract(procedure, contracts);
+  return parseContractSchema(contract.inputSchema, payload, ["payload"], "input");
+}
+
+export function validateApiContractOutput(procedure, output = {}, contracts = apiProcedureContracts) {
+  const contract = getApiProcedureContract(procedure, contracts);
+  return parseContractSchema(contract.outputSchema, output, ["output"], "output");
+}
+
+export function assertTypedApiContractCoverage(
+  contracts = apiProcedureContracts,
+  policies = publicProcedureSecurityPolicies
+) {
+  const issues = [];
+  const procedureNames = Object.keys(contracts).sort();
+
+  for (const procedure of procedureNames) {
+    const contract = contracts[procedure];
+    const policy = policies[procedure];
+
+    if (!PROCEDURE_NAME_PATTERN.test(procedure)) {
+      issues.push(issue([procedure], "invalid_procedure_name", "dot-separated procedure name"));
+    }
+
+    if (!policy) {
+      issues.push(issue([procedure], "missing_security_policy", "public procedure security policy"));
+    }
+
+    if (!["query", "mutation"].includes(contract.kind)) {
+      issues.push(issue([procedure, "kind"], "invalid_kind", "query | mutation"));
+    }
+
+    if (contract.path !== API_TRPC_PATH) {
+      issues.push(issue([procedure, "path"], "invalid_trpc_path", API_TRPC_PATH));
+    }
+
+    if (!contract.inputSchema || typeof contract.inputSchema.parse !== "function") {
+      issues.push(issue([procedure, "inputSchema"], "missing_validation", "input schema parser"));
+    }
+
+    if (!contract.outputSchema || typeof contract.outputSchema.parse !== "function") {
+      issues.push(issue([procedure, "outputSchema"], "missing_validation", "output schema parser"));
+    }
+
+    if (policy && policy.inputSchema !== contract.inputSchema) {
+      issues.push(issue([procedure, "inputSchema"], "contract_policy_mismatch", "shared input schema"));
+    }
+  }
+
+  for (const procedure of Object.keys(policies)) {
+    if (!contracts[procedure]) {
+      issues.push(issue([procedure], "missing_contract", "typed API procedure contract"));
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new ContractValidationError("Typed API contract coverage failed", issues);
+  }
+
+  return true;
+}
+
+function parseContractSchema(schema, value, path, direction) {
+  const issues = [];
+  const parsed = schema.parse(value, path, issues);
+
+  if (issues.length > 0) {
+    throw new ContractValidationError(`API contract ${direction} validation failed`, issues);
+  }
+
+  return parsed;
 }
 
 export function objectSchema(shape) {

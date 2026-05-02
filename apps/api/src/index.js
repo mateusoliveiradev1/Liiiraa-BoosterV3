@@ -33,3 +33,18 @@ export {
   requireBenchmarkSessionCloudSync,
   validateBenchmarkSyncEnvelope
 } from "./benchmark-sync.js";
+export {
+  createApiProcedureHandlers,
+  createTrpcApiRouter,
+  createNativeTrpcApiRouter,
+  callApiProcedure
+} from "./trpc-router.js";
+export {
+  createFastifyApiServer,
+  createNativeTrpcFastifyAdapterOptions,
+  createTrpcFastifyAdapterOptions,
+  handleFastifyProcedureRequest,
+  registerNativeTrpcFastifyAdapter,
+  registerFastifyTrpcApi,
+  startApiServer
+} from "./server.js";

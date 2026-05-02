@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  API_TRPC_PATH,
   ContractValidationError,
   assertProcedureSecurityCoverage,
+  assertTypedApiContractCoverage,
+  apiProcedureContracts,
+  listPublicApiProcedures,
   publicProcedureSecurityPolicies,
+  validateApiContractInput,
+  validateApiContractOutput,
   validateSecurityEnvelope
 } from "../src/index.js";
 
@@ -44,6 +50,7 @@ describe("API contract security policies", () => {
 
   it("requires every public procedure to define baseline controls", () => {
     assert.equal(assertProcedureSecurityCoverage(), true);
+    assert.equal(assertTypedApiContractCoverage(), true);
 
     assert.throws(
       () =>
@@ -56,6 +63,23 @@ describe("API contract security policies", () => {
         }),
       ContractValidationError
     );
+  });
+
+  it("declares tRPC contract metadata for every public procedure", () => {
+    assert.deepEqual(listPublicApiProcedures(), [
+      "benchmarks.sync",
+      "catalog.latest",
+      "system.health"
+    ]);
+
+    for (const procedure of listPublicApiProcedures()) {
+      assert.equal(apiProcedureContracts[procedure].path, API_TRPC_PATH);
+      assert.equal(apiProcedureContracts[procedure].visibility, "public");
+      assert.equal(
+        publicProcedureSecurityPolicies[procedure].inputSchema,
+        apiProcedureContracts[procedure].inputSchema
+      );
+    }
   });
 
   it("validates known procedure input and returns its policy", () => {
@@ -162,6 +186,41 @@ describe("API contract security policies", () => {
           requestId: "req_12345678"
         }),
       ContractValidationError
+    );
+  });
+
+  it("validates typed procedure input and output contracts", () => {
+    assert.deepEqual(validateApiContractInput("system.health", { includeBuild: true }), {
+      includeBuild: true
+    });
+    assert.deepEqual(
+      validateApiContractOutput("system.health", {
+        build: "local",
+        ok: true,
+        service: "@liiiraa/api",
+        uptimeMs: 12,
+        version: "0.0.0"
+      }),
+      {
+        build: "local",
+        ok: true,
+        service: "@liiiraa/api",
+        uptimeMs: 12,
+        version: "0.0.0"
+      }
+    );
+
+    assert.throws(
+      () =>
+        validateApiContractOutput("catalog.latest", {
+          catalogVersion: "v1",
+          channel: "stable",
+          publishedAtUtc: "2026-05-02T00:00:00Z",
+          neonUrl: "postgres://secret"
+        }),
+      (error) =>
+        error instanceof ContractValidationError &&
+        error.issues.some((issue) => issue.code === "unknown_key" && issue.path.join(".") === "output.neonUrl")
     );
   });
 });
