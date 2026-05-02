@@ -12,6 +12,9 @@ import {
   validateApiContractOutput,
   validateSecurityEnvelope
 } from "../src/index.js";
+import {
+  DEFAULT_SIGNED_TWEAK_CATALOG
+} from "../../catalog/src/fixture.js";
 
 describe("API contract security policies", () => {
   const benchmarkSyncPayload = {
@@ -215,7 +218,11 @@ describe("API contract security policies", () => {
         validateApiContractOutput("catalog.latest", {
           catalogVersion: "v1",
           channel: "stable",
+          integrity: DEFAULT_SIGNED_TWEAK_CATALOG.integrity,
+          payload: DEFAULT_SIGNED_TWEAK_CATALOG.payload,
           publishedAtUtc: "2026-05-02T00:00:00Z",
+          schemaVersion: "1",
+          signature: DEFAULT_SIGNED_TWEAK_CATALOG.signature,
           neonUrl: "postgres://secret"
         }),
       (error) =>

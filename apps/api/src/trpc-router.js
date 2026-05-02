@@ -8,6 +8,7 @@ import {
   validateApiContractOutput
 } from "../../../packages/api-contract/src/index.js";
 import { createBenchmarkSessionSyncDecision } from "./benchmark-sync.js";
+import { createCatalogDeliveryResponse } from "./catalog-delivery.js";
 import { createApiSecurityBaseline } from "./security-baseline.js";
 
 const DEFAULT_REQUEST_ID = "req_local0000";
@@ -22,12 +23,7 @@ export function createApiProcedureHandlers(options = {}) {
   };
 
   return {
-    "catalog.latest": async ({ input }) => ({
-      catalogVersion: options.catalogVersion ?? "local-dev",
-      channel: input.channel ?? "stable",
-      minimumAppVersion: options.minimumAppVersion,
-      publishedAtUtc: options.publishedAtUtc ?? new Date(now()).toISOString()
-    }),
+    "catalog.latest": async ({ input }) => createCatalogDeliveryResponse(input, options),
     "benchmarks.sync": async ({ envelope }) => {
       const decision = createBenchmarkSessionSyncDecision(envelope);
 

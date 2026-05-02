@@ -6,6 +6,10 @@ import {
   apiProcedureContracts
 } from "../../../packages/api-contract/src/index.js";
 import {
+  DEFAULT_CATALOG_PUBLIC_KEY_JWK
+} from "../../../packages/catalog/src/fixture.js";
+import { verifySignedCatalogEnvelope } from "../../../packages/catalog/src/index.js";
+import {
   createFastifyApiServer,
   createTrpcApiRouter,
   registerFastifyTrpcApi
@@ -35,11 +39,14 @@ describe("Fastify tRPC API scaffold", () => {
     });
 
     const catalog = await caller.query("catalog.latest", { channel: "beta" });
-    assert.deepEqual(catalog, {
-      catalogVersion: "local-dev",
-      channel: "beta",
-      publishedAtUtc: "2026-05-02T00:00:00Z"
+    const verifiedCatalog = await verifySignedCatalogEnvelope(catalog, {
+      publicKeyJwk: DEFAULT_CATALOG_PUBLIC_KEY_JWK
     });
+    assert.equal(catalog.catalogVersion, "2026.05.02-beta.1");
+    assert.equal(catalog.channel, "beta");
+    assert.equal(catalog.schemaVersion, "1");
+    assert.equal(verifiedCatalog.payload.channel, "beta");
+    assert.equal(verifiedCatalog.payload.entries.some((entry) => entry.id === "sys.scan.inventory"), true);
 
     const benchmark = await caller.mutation("benchmarks.sync", benchmarkSyncPayload());
     assert.equal(benchmark.accepted, true);

@@ -8,11 +8,29 @@ const catalogLatestInputSchema = objectSchema({
   channel: optionalEnumSchema(["dev", "beta", "stable"]),
   clientVersion: optionalStringSchema({ maxLength: 64 })
 });
+const catalogPayloadSchema = plainObjectSchema();
+const catalogSignaturePublicKeySchema = objectSchema({
+  crv: requiredStringSchema({ maxLength: 16 }),
+  ext: optionalBooleanSchema(),
+  kty: requiredStringSchema({ maxLength: 16 }),
+  x: requiredStringSchema({ maxLength: 128 }),
+  y: requiredStringSchema({ maxLength: 128 })
+});
+const catalogSignatureSchema = objectSchema({
+  algorithm: enumSchema(["ECDSA_P256_SHA256"]),
+  keyId: requiredStringSchema({ maxLength: 96 }),
+  publicKeyJwk: catalogSignaturePublicKeySchema,
+  value: requiredStringSchema({ maxLength: 256 })
+});
 const catalogLatestOutputSchema = objectSchema({
   catalogVersion: requiredStringSchema({ maxLength: 96 }),
   channel: enumSchema(["dev", "beta", "stable"]),
+  integrity: requiredStringSchema({ maxLength: 96 }),
   minimumAppVersion: optionalStringSchema({ maxLength: 64 }),
-  publishedAtUtc: requiredStringSchema({ maxLength: 40 })
+  payload: catalogPayloadSchema,
+  publishedAtUtc: requiredStringSchema({ maxLength: 40 }),
+  schemaVersion: requiredStringSchema({ maxLength: 16 }),
+  signature: catalogSignatureSchema
 });
 const systemHealthInputSchema = objectSchema({
   includeBuild: optionalBooleanSchema()
@@ -327,6 +345,19 @@ export function objectSchema(shape) {
       }
 
       return parsed;
+    }
+  };
+}
+
+export function plainObjectSchema() {
+  return {
+    parse(value, path = [], issues = []) {
+      if (!isPlainObject(value)) {
+        issues.push(issue(path, "invalid_type", "object"));
+        return undefined;
+      }
+
+      return value;
     }
   };
 }

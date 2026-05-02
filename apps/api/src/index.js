@@ -34,6 +34,9 @@ export {
   validateBenchmarkSyncEnvelope
 } from "./benchmark-sync.js";
 export {
+  createCatalogDeliveryResponse
+} from "./catalog-delivery.js";
+export {
   createApiProcedureHandlers,
   createTrpcApiRouter,
   createNativeTrpcApiRouter,
