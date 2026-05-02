@@ -79,6 +79,7 @@
     "active": true,
     "targets": ["nsis"],
     "category": "Utility",
+    "createUpdaterArtifacts": true,
     "icon": [
       "../src/assets/app-icon.ico"
     ],
@@ -89,5 +90,15 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgzMzVFNDJGOTQ1RjM3QTEKUldTaE4xK1VMK1ExZzRkSFJZQTBxd3V3L2poZXExbW1XRTA3NGtRNFJzSWR5Q0lYbGprSkpaTzQK",
+      "endpoints": [
+        "https://updates.liiiraa.example/stable/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }

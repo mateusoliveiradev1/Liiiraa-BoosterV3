@@ -14,6 +14,8 @@ tauri-build = { version = "2", features = [] }
 optimizer-core = { path = "../../../crates/optimizer-core" }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+url = "2"
 windows-api = { path = "../../../crates/windows-api" }
 
 [lints.rust]
