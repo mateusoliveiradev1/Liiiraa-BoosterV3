@@ -1,5 +1,6 @@
 //! Pure tweak planning, policy, validation, and risk modeling.
 
+pub mod anti_cheat;
 pub mod backup;
 pub mod background_work;
 pub mod catalog;

@@ -886,6 +886,152 @@ pub fn is_pubg_or_battleye_process_name(process_name: &str) -> bool {
         .any(|candidate| candidate.eq_ignore_ascii_case(&process_name))
 }
 
+/// PUBG anti-cheat guardrail class for mutation candidates that must be denied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PubgAntiCheatGuardrailKind {
+    /// Request to read, write, patch, or scan PUBG process memory.
+    GameMemory,
+    /// Request to patch or delete PUBG binaries, PAK files, shaders, movies, or content folders.
+    PubgGameContent,
+    /// Request to modify BattlEye files or directories.
+    BattleEyeFile,
+    /// Request to alter BattlEye service state, permissions, handles, or launch integrity.
+    BattleEyeService,
+    /// Request to disable driver signature enforcement or integrity checks.
+    DriverSignature,
+    /// Request to enable Windows test-signing.
+    TestSigning,
+    /// Request to enable kernel debugging.
+    KernelDebugging,
+}
+
+impl PubgAntiCheatGuardrailKind {
+    /// Returns a stable finding label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::GameMemory => "game_memory",
+            Self::PubgGameContent => "pubg_game_content",
+            Self::BattleEyeFile => "battleye_file",
+            Self::BattleEyeService => "battleye_service",
+            Self::DriverSignature => "driver_signature",
+            Self::TestSigning => "test_signing",
+            Self::KernelDebugging => "kernel_debugging",
+        }
+    }
+
+    fn reason(self) -> &'static str {
+        match self {
+            Self::GameMemory => {
+                "PUBG process memory access is anti-cheat-hostile and outside Liiiraa Booster's optimization boundary."
+            }
+            Self::PubgGameContent => {
+                "PUBG game binaries and content folders must not be modified by the optimizer."
+            }
+            Self::BattleEyeFile => {
+                "BattlEye files and directories must remain untouched to preserve anti-cheat trust."
+            }
+            Self::BattleEyeService => {
+                "BattlEye service, permission, handle, and launch-integrity tampering is denied."
+            }
+            Self::DriverSignature => {
+                "Driver signature enforcement and integrity-check bypasses weaken Windows and anti-cheat trust."
+            }
+            Self::TestSigning => {
+                "Windows test-signing is incompatible with the trusted anti-cheat posture required for PUBG."
+            }
+            Self::KernelDebugging => {
+                "Kernel debugging state is denied because BattlEye treats kernel debug behavior as unsafe."
+            }
+        }
+    }
+
+    fn recommendation(self) -> &'static str {
+        match self {
+            Self::PubgGameContent => {
+                "Use Steam or Epic verify/repair flows instead of deleting or patching game content."
+            }
+            Self::GameMemory
+            | Self::BattleEyeFile
+            | Self::BattleEyeService
+            | Self::DriverSignature
+            | Self::TestSigning
+            | Self::KernelDebugging => {
+                "Reject the request and keep optimization limited to typed, reversible, non-tampering actions."
+            }
+        }
+    }
+}
+
+/// One anti-cheat guardrail finding detected from a requested PUBG mutation target.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PubgAntiCheatGuardrailFinding {
+    /// Requested path, command, operation target, or catalog value that triggered the finding.
+    pub target: String,
+    /// Guardrail class that explains why this target is denied.
+    pub kind: PubgAntiCheatGuardrailKind,
+    /// User-facing reason for denial.
+    pub reason: String,
+    /// Recommended safe next step.
+    pub recommendation: String,
+}
+
+/// Detects anti-cheat-hostile targets from requested PUBG mutation candidates.
+///
+/// This function is intentionally for mutation candidates only. Read-only discovery can
+/// observe PUBG and BattlEye paths without passing those observations through this guard.
+#[must_use]
+pub fn detect_pubg_anticheat_guardrails<I, S>(
+    mutation_targets: I,
+) -> Vec<PubgAntiCheatGuardrailFinding>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    mutation_targets
+        .into_iter()
+        .filter_map(|target| {
+            let target = target.as_ref().trim();
+            classify_pubg_anticheat_target(target).map(|kind| PubgAntiCheatGuardrailFinding {
+                target: target.to_owned(),
+                kind,
+                reason: kind.reason().to_owned(),
+                recommendation: kind.recommendation().to_owned(),
+            })
+        })
+        .collect()
+}
+
+/// Classifies one requested PUBG mutation target that must be denied for anti-cheat safety.
+#[must_use]
+pub fn classify_pubg_anticheat_target(target: &str) -> Option<PubgAntiCheatGuardrailKind> {
+    let target = normalize_anticheat_target(target);
+
+    if target.is_empty() {
+        return None;
+    }
+
+    if looks_like_kernel_debugging_change(&target) {
+        Some(PubgAntiCheatGuardrailKind::KernelDebugging)
+    } else if looks_like_test_signing_change(&target) {
+        Some(PubgAntiCheatGuardrailKind::TestSigning)
+    } else if looks_like_driver_signature_change(&target) {
+        Some(PubgAntiCheatGuardrailKind::DriverSignature)
+    } else if looks_like_battleye_file_mutation(&target) {
+        Some(PubgAntiCheatGuardrailKind::BattleEyeFile)
+    } else if looks_like_battleye_service_tamper(&target) {
+        Some(PubgAntiCheatGuardrailKind::BattleEyeService)
+    } else if looks_like_pubg_memory_access(&target) {
+        Some(PubgAntiCheatGuardrailKind::GameMemory)
+    } else if looks_like_pubg_game_content_mutation(&target) {
+        Some(PubgAntiCheatGuardrailKind::PubgGameContent)
+    } else {
+        None
+    }
+}
+
 /// Read-only snapshot of PUBG config files captured before generating suggestions.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1287,6 +1433,76 @@ fn canonical_process_name(process_name: &str) -> String {
         .unwrap_or(trimmed)
         .trim()
         .to_owned()
+}
+
+fn normalize_anticheat_target(target: &str) -> String {
+    target
+        .trim()
+        .trim_matches('"')
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+fn looks_like_pubg_memory_access(target: &str) -> bool {
+    target.contains("pubg:memory")
+        || target.contains("game-memory")
+        || target.contains("process-memory")
+        || target.contains("tslgame.exe:memory")
+        || target.contains("tslgame.exe/memory")
+        || ((target.contains("readprocessmemory")
+            || target.contains("writeprocessmemory")
+            || target.contains("openprocess"))
+            && target.contains("tslgame"))
+}
+
+fn looks_like_pubg_game_content_mutation(target: &str) -> bool {
+    target.contains("/tslgame/content/")
+        || target.contains("/content/paks/")
+        || target.ends_with(".pak")
+        || target.contains("/movies/")
+        || target.contains("/shaders/")
+        || target.contains("/tslgame/binaries/win64/tslgame.exe")
+}
+
+fn looks_like_battleye_file_mutation(target: &str) -> bool {
+    target.contains("/battleye/")
+        || target.ends_with("/battleye")
+        || target.contains("beservice.exe")
+        || target.contains("beservice_x64.exe")
+        || target.contains("install_battleye.bat")
+}
+
+fn looks_like_battleye_service_tamper(target: &str) -> bool {
+    (target.contains("beservice") || target.contains("battleye"))
+        && (target.contains("service:")
+            || target.contains("service/")
+            || target.contains("sc ")
+            || target.contains("sc.exe")
+            || target.contains("permissions")
+            || target.contains("acl")
+            || target.contains("disable")
+            || target.contains("stop"))
+}
+
+fn looks_like_driver_signature_change(target: &str) -> bool {
+    target.contains("nointegritychecks")
+        || target.contains("disable_integrity_checks")
+        || target.contains("driver-signature")
+        || target.contains("driver signature")
+        || target.contains("signature-enforcement:disable")
+}
+
+fn looks_like_test_signing_change(target: &str) -> bool {
+    target.contains("testsigning")
+        || target.contains("test-signing")
+        || target.contains("test signing")
+}
+
+fn looks_like_kernel_debugging_change(target: &str) -> bool {
+    target.contains("kernel-debug")
+        || target.contains("kernel debug")
+        || target.contains("debugtype")
+        || (target.contains("bcdedit") && target.contains("debug") && target.contains("on"))
 }
 
 fn read_pubg_config_file_snapshot(
@@ -2191,6 +2407,63 @@ mod tests {
         );
         assert!(!state.allows_profile_mutation());
         assert!(PubgRuntimeState::no_processes().allows_profile_mutation());
+    }
+
+    #[test]
+    fn classifies_anticheat_hostile_memory_file_and_bcd_targets() {
+        let findings = detect_pubg_anticheat_guardrails([
+            r"pubg:process-memory/write:TslGame.exe",
+            r"C:\Games\PUBG\TslGame\Binaries\Win64\BattlEye\BEService_x64.exe",
+            "bcdedit /set testsigning on",
+            "bcdedit /debug on",
+            "bcdedit /set nointegritychecks on",
+        ]);
+
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| finding.kind)
+                .collect::<Vec<_>>(),
+            vec![
+                PubgAntiCheatGuardrailKind::GameMemory,
+                PubgAntiCheatGuardrailKind::BattleEyeFile,
+                PubgAntiCheatGuardrailKind::TestSigning,
+                PubgAntiCheatGuardrailKind::KernelDebugging,
+                PubgAntiCheatGuardrailKind::DriverSignature,
+            ]
+        );
+        assert!(findings
+            .iter()
+            .all(|finding| finding.recommendation.contains("Reject")
+                || finding.recommendation.contains("verify/repair")));
+    }
+
+    #[test]
+    fn classifies_pubg_content_and_battleye_service_tampering() {
+        assert_eq!(
+            classify_pubg_anticheat_target(
+                r"C:\Games\PUBG\TslGame\Content\Paks\pakchunk0-WindowsNoEditor.pak"
+            ),
+            Some(PubgAntiCheatGuardrailKind::PubgGameContent)
+        );
+        assert_eq!(
+            classify_pubg_anticheat_target("service:BEService/disable"),
+            Some(PubgAntiCheatGuardrailKind::BattleEyeService)
+        );
+    }
+
+    #[test]
+    fn anticheat_classifier_allows_safe_config_snapshot_paths() {
+        assert_eq!(
+            classify_pubg_anticheat_target(
+                r"C:\Users\Player\AppData\Local\TslGame\Saved\Config\WindowsClient\GameUserSettings.ini"
+            ),
+            None
+        );
+        assert_eq!(
+            classify_pubg_anticheat_target("pubg.config.safe-read"),
+            None
+        );
     }
 
     #[test]
