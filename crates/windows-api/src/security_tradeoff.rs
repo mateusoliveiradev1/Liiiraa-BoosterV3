@@ -14,8 +14,9 @@ use optimizer_core::{
     tweak_contracts::{PlanAction, TweakOperationKind, TweakPlan},
 };
 
+use crate::scan::DeviceGuardScan;
 use crate::{
-    DeviceGuardScan, SystemScanReport, WindowsOptionalFeatureScanItem, WindowsRollbackFixture,
+    SystemScanReport, WindowsOptionalFeatureScanItem, WindowsRollbackFixture,
 };
 
 /// Summary for fixture apply or verify work.

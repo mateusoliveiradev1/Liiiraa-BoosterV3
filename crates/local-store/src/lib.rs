@@ -328,7 +328,14 @@ impl LocalStore {
                 generated_frames_detected, latency_proxy
              FROM benchmark_captures
              WHERE session_id = ?1
-             ORDER BY captured_at_utc, id",
+             ORDER BY captured_at_utc,
+                CASE phase
+                    WHEN 'before' THEN 0
+                    WHEN 'single' THEN 1
+                    WHEN 'after' THEN 2
+                    ELSE 3
+                END,
+                id",
         )?;
         let rows = statement.query_map([session_id], map_benchmark_capture)?;
 
