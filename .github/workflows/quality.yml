@@ -39,10 +39,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright Chromium
+        run: pnpm --filter @liiiraa/desktop exec playwright install --with-deps chromium
+
       - name: Set up Rust
         run: |
-          rustup toolchain install 1.80.0 --profile minimal --no-self-update
-          rustup default 1.80.0
+          rustup toolchain install 1.88.0 --profile minimal --no-self-update
+          rustup default 1.88.0
 
       - name: Validate commit message range
         shell: bash
