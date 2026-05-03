@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
+import { tOptimizer } from "../../../../../packages/ui/src/localization";
+import { runDesktopAction } from "../../actionRuntime";
 import type {
   SettingsTrustActionVariant,
   SettingsTrustChannel,
@@ -42,9 +44,9 @@ const trustMarkStyle: CSSProperties = {
   alignItems: "center",
   minHeight: "2.3rem",
   padding: "0.45rem 0.7rem",
-  color: "var(--success)",
-  border: "1px solid rgba(58, 242, 143, 0.55)",
-  borderRadius: "8px",
+  color: "var(--trust)",
+  border: "1px solid color-mix(in srgb, var(--trust) 55%, var(--border))",
+  borderRadius: "var(--radius-card)",
   fontWeight: 900
 };
 
@@ -91,11 +93,35 @@ export function SettingsTrustSurfaces({
         </div>
         <div className="header-actions">
           <span style={trustMarkStyle}>{data.signature}</span>
-          <button className="button button--primary" type="button">
-            Check updates
+          <button
+            className="button button--primary"
+            type="button"
+            onClick={() =>
+              void runDesktopAction({
+                command: "check-signed-update",
+                feedback: "Checking signed update metadata from the trusted release channel.",
+                id: "settings-check-updates",
+                label: tOptimizer("actions.checkUpdates"),
+                targetRoute: "settings"
+              })
+            }
+          >
+            <span>{tOptimizer("actions.checkUpdates")}</span>
           </button>
-          <button className="button button--secondary" type="button">
-            Export local data
+          <button
+            className="button button--secondary"
+            type="button"
+            onClick={() =>
+              void runDesktopAction({
+                command: "export-local-data",
+                feedback: "Preparing local-only privacy export with telemetry consent boundaries intact.",
+                id: "settings-export-local-data",
+                label: tOptimizer("actions.exportLocalData"),
+                targetRoute: "settings"
+              })
+            }
+          >
+            <span>{tOptimizer("actions.exportLocalData")}</span>
           </button>
         </div>
       </header>
@@ -288,19 +314,52 @@ function LocalDataAction({
     action.variant === "danger"
       ? {
           color: "var(--danger)",
-          borderColor: "rgba(255, 90, 103, 0.7)",
-          background: "#331c23"
+          borderColor: "color-mix(in srgb, var(--danger) 70%, var(--border))",
+          background: "var(--desktop-state-danger-surface)"
         }
       : undefined;
 
   return (
     <div style={definitionRowStyle}>
-      <button className={className} style={buttonStyle} type="button">
-        {action.label}
+      <button
+        className={className}
+        style={buttonStyle}
+        type="button"
+        onClick={() =>
+          void runDesktopAction({
+            command: commandForLocalDataAction(action),
+            feedback: feedbackForLocalDataAction(action),
+            id: action.id,
+            label: action.label,
+            targetRoute: "settings"
+          })
+        }
+      >
+        <span>{action.label}</span>
       </button>
       <small className="workflow-muted">{action.detail}</small>
     </div>
   );
+}
+
+function commandForLocalDataAction(action: { id: string; variant: SettingsTrustActionVariant }) {
+  if (action.id === "open-data-folder") {
+    return "open-data-folder" as const;
+  }
+
+  if (action.variant === "danger") {
+    return "confirm-required" as const;
+  }
+
+  return "export-local-data" as const;
+}
+
+function feedbackForLocalDataAction(action: { label: string; variant: SettingsTrustActionVariant }) {
+  if (action.variant === "danger") {
+    return `${action.label} requires confirmation before any local queue changes.`;
+  }
+
+  return `${action.label} is staged locally; no cloud upload runs without consent.`;
 }
 
 function DefinitionGrid({ items }: { items: Array<[string, string]> }) {

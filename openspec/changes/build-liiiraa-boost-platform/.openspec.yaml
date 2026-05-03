@@ -1,0 +1,6 @@
+name: build-liiiraa-boost-platform
+status: proposed
+created: 2026-04-30
+schema: spec-driven
+summary: Build a modular PC optimization platform with a Tauri desktop app, Rust optimizer engine, Neon-backed cloud API, full test strategy, and future landing page.
+repository: https://github.com/mateusoliveiradev1/Liiiraa-BoosterV3.git

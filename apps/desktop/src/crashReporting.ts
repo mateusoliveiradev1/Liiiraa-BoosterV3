@@ -57,13 +57,19 @@ export function createDesktopCrashReportDecision({
   const redactedReport = createDesktopCrashReport(report);
   const accepted = gate.allowed && destination === "cloud";
 
-  return {
+  const decision: DesktopCrashReportDecision = {
     accepted,
     gate,
-    localReport: accepted ? undefined : redactedReport,
-    uploadPayload: accepted ? redactedReport : undefined,
     version: DESKTOP_CRASH_REPORTING_VERSION
   };
+
+  if (accepted) {
+    decision.uploadPayload = redactedReport;
+  } else {
+    decision.localReport = redactedReport;
+  }
+
+  return decision;
 }
 
 export function captureDesktopErrorReport(

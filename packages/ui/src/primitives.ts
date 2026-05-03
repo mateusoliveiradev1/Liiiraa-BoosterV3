@@ -1,3 +1,5 @@
+import { optimizerGlossaryKeys, tOptimizer, type OptimizerLocaleKey } from "./localization";
+
 export type PrimitiveAttributeValue = string | number | boolean | undefined;
 
 export type PrimitiveAttributes = Record<string, PrimitiveAttributeValue>;
@@ -13,19 +15,46 @@ export type PrimitiveElement =
   | "span";
 
 export type PrimitiveKind =
+  | "benchmark-delta"
   | "button"
+  | "card"
+  | "category-lane"
+  | "drawer"
   | "icon-button"
   | "metric-tile"
   | "mode-segmented-control"
+  | "proof-tile"
   | "risk-badge"
+  | "state-badge"
   | "status-strip"
+  | "tab-list"
   | "toolbar"
-  | "tooltip";
+  | "toggle"
+  | "tooltip"
+  | "trust-badge";
 
 export type PrimitiveSize = "sm" | "md" | "lg";
 export type PrimitiveDensity = "compact" | "comfortable";
-export type PrimitiveTone = "neutral" | "success" | "active" | "warning" | "danger" | "lab";
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type PrimitiveTone =
+  | "neutral"
+  | "success"
+  | "active"
+  | "warning"
+  | "danger"
+  | "lab"
+  | "trust"
+  | "rollback"
+  | "benchmark"
+  | "locked";
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "danger"
+  | "destructive"
+  | "rollback"
+  | "locked"
+  | "success";
 export type RiskLevel = "low" | "medium" | "high" | "critical" | "lab";
 export type OptimizationMode = "safe" | "competitive" | "lab" | "blocked";
 
@@ -65,6 +94,8 @@ export interface PrimitiveDefinition extends PrimitivePart {
 export interface InteractivePrimitiveState {
   disabled?: boolean;
   busy?: boolean;
+  locked?: boolean;
+  successful?: boolean;
   selected?: boolean;
   pressed?: boolean;
   expanded?: boolean;
@@ -158,6 +189,97 @@ export interface ToolbarPrimitiveOptions {
   actions: IconButtonPrimitiveOptions[];
 }
 
+export interface TabPrimitiveOption {
+  id: string;
+  label: string;
+  panelId: string;
+  icon?: PrimitiveIconName;
+  disabled?: boolean;
+}
+
+export interface TabListPrimitiveOptions {
+  id?: string;
+  label: string;
+  value: string;
+  tabs: TabPrimitiveOption[];
+}
+
+export interface TogglePrimitiveOptions {
+  id?: string;
+  label: string;
+  pressed: boolean;
+  description?: string;
+  disabled?: boolean;
+}
+
+export interface CardPrimitiveOptions {
+  id?: string;
+  label: string;
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  tone?: PrimitiveTone;
+  actions?: ButtonPrimitiveOptions[];
+}
+
+export interface StateBadgePrimitiveOptions {
+  id?: string;
+  label: string;
+  tone?: PrimitiveTone;
+  icon?: PrimitiveIconName;
+  detail?: string;
+}
+
+export interface TrustBadgePrimitiveOptions {
+  id?: string;
+  label: string;
+  value: string;
+  detail: string;
+  icon?: PrimitiveIconName;
+  tone?: "trust" | "rollback" | "benchmark" | "success" | "active";
+}
+
+export interface BenchmarkDeltaPrimitiveOptions {
+  id?: string;
+  label: string;
+  before: string;
+  after: string;
+  delta: string;
+  tone?: "success" | "active" | "benchmark" | "warning";
+  width?: number;
+}
+
+export interface ProofTilePrimitiveOptions {
+  id?: string;
+  label: string;
+  metric: string;
+  detail: string;
+  tone?: "success" | "active" | "benchmark" | "warning" | "trust";
+  sourceLabel?: string;
+}
+
+export interface CategoryLanePrimitiveOptions {
+  id?: string;
+  title: string;
+  summary: string;
+  status: string;
+  trustSignal: string;
+  primaryAction: ButtonPrimitiveOptions;
+  detailAction?: ButtonPrimitiveOptions;
+  tone?: PrimitiveTone;
+  icon?: PrimitiveIconName;
+}
+
+export interface DrawerPrimitiveOptions {
+  id?: string;
+  label: string;
+  title: string;
+  description?: string;
+  open?: boolean;
+  tone?: PrimitiveTone;
+  actions?: ButtonPrimitiveOptions[];
+}
+
 const focusClass =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--liiiraa-color-focus)] focus-visible:shadow-[var(--liiiraa-shadow-focus)]";
 
@@ -182,7 +304,15 @@ const toneClassNames: Record<PrimitiveTone, string> = {
   danger:
     "border-[var(--color-liiiraa-danger)] bg-[var(--color-liiiraa-danger-surface)] text-[var(--color-liiiraa-danger)]",
   lab:
-    "border-[var(--color-liiiraa-violet)] bg-[var(--color-liiiraa-violet-soft)] text-[var(--color-liiiraa-violet)]"
+    "border-[var(--color-liiiraa-violet)] bg-[var(--color-liiiraa-violet-soft)] text-[var(--color-liiiraa-violet)]",
+  trust:
+    "border-[var(--color-liiiraa-trust)] bg-[var(--color-liiiraa-trust-surface)] text-[var(--color-liiiraa-trust)]",
+  rollback:
+    "border-[var(--color-liiiraa-rollback)] bg-[var(--color-liiiraa-rollback-surface)] text-[var(--color-liiiraa-rollback)]",
+  benchmark:
+    "border-[var(--color-liiiraa-benchmark)] bg-[var(--color-liiiraa-benchmark-surface)] text-[var(--color-liiiraa-benchmark)]",
+  locked:
+    "border-[var(--liiiraa-color-border-subtle)] bg-[var(--color-liiiraa-locked-surface)] text-[var(--color-liiiraa-locked)]"
 };
 
 const buttonVariantClassNames: Record<ButtonVariant, string> = {
@@ -193,7 +323,15 @@ const buttonVariantClassNames: Record<ButtonVariant, string> = {
   ghost:
     "border-transparent bg-transparent text-[var(--liiiraa-color-text-secondary)] hover:border-[var(--liiiraa-color-border-subtle)] hover:bg-[var(--liiiraa-color-surface-panel)] hover:text-[var(--liiiraa-color-text-primary)]",
   danger:
-    "border-[var(--color-liiiraa-danger)] bg-[var(--color-liiiraa-danger-surface)] text-[var(--color-liiiraa-danger)] hover:bg-[var(--color-liiiraa-danger)] hover:text-[var(--liiiraa-color-background-app)]"
+    "border-[var(--color-liiiraa-danger)] bg-[var(--color-liiiraa-danger-surface)] text-[var(--color-liiiraa-danger)] hover:bg-[var(--color-liiiraa-danger)] hover:text-[var(--liiiraa-color-background-app)]",
+  destructive:
+    "border-[var(--color-liiiraa-danger)] bg-[var(--color-liiiraa-danger-surface)] text-[var(--color-liiiraa-danger)] hover:bg-[var(--color-liiiraa-danger)] hover:text-[var(--liiiraa-color-background-app)]",
+  rollback:
+    "border-[var(--color-liiiraa-rollback)] bg-[var(--color-liiiraa-rollback-surface)] text-[var(--color-liiiraa-rollback)] hover:bg-[var(--color-liiiraa-rollback)] hover:text-[var(--liiiraa-color-background-app)]",
+  locked:
+    "border-[var(--liiiraa-color-border-subtle)] bg-[var(--color-liiiraa-locked-surface)] text-[var(--liiiraa-color-text-disabled)]",
+  success:
+    "border-[var(--color-liiiraa-success)] bg-[var(--color-liiiraa-success-surface)] text-[var(--color-liiiraa-success)]"
 };
 
 const buttonSizeClassNames: Record<PrimitiveSize, string> = {
@@ -210,42 +348,46 @@ const iconButtonSizeClassNames: Record<PrimitiveSize, string> = {
 
 const riskMeta: Record<
   RiskLevel,
-  { label: string; tone: PrimitiveTone; icon: PrimitiveIconName; shape: string }
+  { labelKey: OptimizerLocaleKey; tone: PrimitiveTone; icon: PrimitiveIconName; shape: string }
 > = {
-  low: { label: "Low risk", tone: "success", icon: "shield-check", shape: "rounded-[var(--radius-liiiraa-sm)]" },
-  medium: { label: "Moderate risk", tone: "active", icon: "info", shape: "rounded-[var(--radius-liiiraa-sm)]" },
-  high: { label: "High risk", tone: "warning", icon: "triangle-alert", shape: "rounded-[var(--radius-liiiraa-md)]" },
-  critical: { label: "Critical risk", tone: "danger", icon: "octagon-alert", shape: "rounded-none" },
-  lab: { label: "Lab only", tone: "lab", icon: "flask-conical", shape: "rounded-full" }
+  low: { labelKey: "risk.low", tone: "success", icon: "shield-check", shape: "rounded-[var(--radius-liiiraa-sm)]" },
+  medium: { labelKey: "risk.medium", tone: "active", icon: "info", shape: "rounded-[var(--radius-liiiraa-sm)]" },
+  high: { labelKey: "risk.high", tone: "warning", icon: "triangle-alert", shape: "rounded-[var(--radius-liiiraa-md)]" },
+  critical: { labelKey: "risk.critical", tone: "danger", icon: "octagon-alert", shape: "rounded-none" },
+  lab: { labelKey: "risk.lab", tone: "lab", icon: "flask-conical", shape: "rounded-full" }
 };
 
-export const defaultModeOptions: ModeSegmentedControlOption[] = [
+export const createDefaultModeOptions = (
+  translate: (key: OptimizerLocaleKey) => string = tOptimizer
+): ModeSegmentedControlOption[] => [
   {
     value: "safe",
-    label: "Safe",
-    description: "Low-risk reversible changes only.",
+    label: translate(optimizerGlossaryKeys.safe),
+    description: translate("modes.safeDescription"),
     icon: "shield-check"
   },
   {
     value: "competitive",
-    label: "Competitive",
-    description: "Performance tradeoffs with explicit review.",
+    label: translate(optimizerGlossaryKeys.competitive),
+    description: translate("modes.competitiveDescription"),
     icon: "zap"
   },
   {
     value: "lab",
-    label: "Lab",
-    description: "Experimental changes behind per-category opt-in.",
+    label: translate(optimizerGlossaryKeys.lab),
+    description: translate("modes.labDescription"),
     icon: "flask-conical"
   },
   {
     value: "blocked",
-    label: "Blocked",
-    description: "Educational items that cannot be applied.",
+    label: translate(optimizerGlossaryKeys.blocked),
+    description: translate("modes.blockedDescription"),
     icon: "ban",
     disabled: true
   }
 ];
+
+export const defaultModeOptions: ModeSegmentedControlOption[] = createDefaultModeOptions();
 
 const compactClasses = (...classes: Array<string | false | null | undefined>) =>
   classes.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
@@ -265,14 +407,16 @@ const interactiveAttributes = (
 ): PrimitiveAttributes => ({
   ...extras,
   "aria-busy": state?.busy ? "true" : undefined,
-  "aria-disabled": state?.disabled ? "true" : undefined,
+  "aria-disabled": state?.disabled || state?.locked ? "true" : undefined,
   "aria-expanded": state?.expanded == null ? undefined : String(state.expanded),
   "aria-invalid": state?.invalid ? "true" : undefined,
   "aria-pressed": state?.pressed == null ? undefined : String(state.pressed),
   "aria-selected": state?.selected == null ? undefined : String(state.selected),
   "data-busy": state?.busy ? "true" : undefined,
-  "data-disabled": state?.disabled ? "true" : undefined,
-  "data-selected": state?.selected ? "true" : undefined
+  "data-disabled": state?.disabled || state?.locked ? "true" : undefined,
+  "data-locked": state?.locked ? "true" : undefined,
+  "data-selected": state?.selected ? "true" : undefined,
+  "data-state": state?.successful ? "success" : state?.busy ? "loading" : undefined
 });
 
 const iconPart = (icon: PrimitiveIconName): PrimitivePart => ({
@@ -302,7 +446,7 @@ export function createTooltipPrimitive(id: string, content: string): TooltipPrim
 
 export function createButtonPrimitive(options: ButtonPrimitiveOptions): PrimitiveDefinition {
   const id = options.id ?? toId(`button-${options.label}`);
-  const variant = options.variant ?? "secondary";
+  const variant = options.state?.locked ? "locked" : options.state?.successful ? "success" : options.variant ?? "secondary";
   const size = options.size ?? "md";
 
   return {
@@ -321,7 +465,7 @@ export function createButtonPrimitive(options: ButtonPrimitiveOptions): Primitiv
     attributes: interactiveAttributes(options.state, {
       id,
       type: "button",
-      disabled: options.state?.disabled ? true : undefined,
+      disabled: options.state?.disabled || options.state?.locked ? true : undefined,
       "aria-describedby": options.describedBy,
       "data-liiiraa-primitive": "button",
       "data-variant": variant
@@ -341,7 +485,7 @@ export function createButtonPrimitive(options: ButtonPrimitiveOptions): Primitiv
 export function createIconButtonPrimitive(options: IconButtonPrimitiveOptions): PrimitiveDefinition {
   const id = options.id ?? toId(`icon-button-${options.label}`);
   const size = options.size ?? "md";
-  const variant = options.variant ?? "ghost";
+  const variant = options.state?.locked ? "locked" : options.state?.successful ? "success" : options.variant ?? "ghost";
   const tooltipId = `${id}-tooltip`;
 
   return {
@@ -359,7 +503,7 @@ export function createIconButtonPrimitive(options: IconButtonPrimitiveOptions): 
     attributes: interactiveAttributes(options.state, {
       id,
       type: "button",
-      disabled: options.state?.disabled ? true : undefined,
+      disabled: options.state?.disabled || options.state?.locked ? true : undefined,
       title: options.tooltip,
       "aria-label": options.label,
       "aria-describedby": tooltipId,
@@ -381,9 +525,12 @@ export function createIconButtonPrimitive(options: IconButtonPrimitiveOptions): 
 
 export function createRiskBadgePrimitive(options: RiskBadgePrimitiveOptions): PrimitiveDefinition {
   const meta = riskMeta[options.level];
-  const label = options.label ?? meta.label;
+  const label = options.label ?? tOptimizer(meta.labelKey);
   const id = options.id ?? toId(`risk-${options.level}-${label}`);
-  const ariaLabel = options.detail ? `Risk: ${label}. ${options.detail}` : `Risk: ${label}`;
+  const riskLabel = tOptimizer(optimizerGlossaryKeys.risk);
+  const ariaLabel = options.detail
+    ? tOptimizer("risk.ariaWithDetail", { detail: options.detail, label, risk: riskLabel })
+    : tOptimizer("risk.aria", { label, risk: riskLabel });
 
   return {
     id,
@@ -538,10 +685,10 @@ export function createStatusStripPrimitive(options: StatusStripPrimitiveOptions)
 export function createMetricTilePrimitive(options: MetricTilePrimitiveOptions): PrimitiveDefinition {
   const id = options.id ?? toId(`metric-${options.label}`);
   const tone = options.tone ?? "active";
-  const metricValue = options.loading ? "Measuring" : options.value;
+  const metricValue = options.loading ? tOptimizer("primitives.metric.measuring") : options.value;
   const unitLabel = options.unit ? ` ${options.unit}` : "";
   const ariaLabel = `${options.label}: ${metricValue}${unitLabel}${
-    options.delta ? `. Delta ${options.delta}` : ""
+    options.delta ? `. ${tOptimizer("primitives.metric.delta")} ${options.delta}` : ""
   }`;
 
   return {
@@ -619,14 +766,470 @@ export function createToolbarPrimitive(options: ToolbarPrimitiveOptions): Primit
   };
 }
 
+export function createTabListPrimitive(options: TabListPrimitiveOptions): PrimitiveDefinition {
+  const id = options.id ?? toId(`tabs-${options.label}`);
+  const selectedCount = options.tabs.filter((tab) => tab.id === options.value).length;
+
+  if (options.tabs.length === 0) {
+    throw new Error("Tab list requires at least one tab.");
+  }
+
+  if (selectedCount !== 1) {
+    throw new Error(`Tab list value must match exactly one tab: ${options.value}.`);
+  }
+
+  return {
+    id,
+    primitive: "tab-list",
+    element: "div",
+    className: "liiiraa-tab-list",
+    attributes: {
+      id,
+      role: "tablist",
+      "aria-label": options.label,
+      "data-liiiraa-primitive": "tab-list"
+    },
+    parts: Object.fromEntries(
+      options.tabs.map((tab) => {
+        const selected = tab.id === options.value;
+
+        return [
+          tab.id,
+          {
+            element: "button",
+            className: compactClasses(
+              "liiiraa-action min-w-0",
+              selected && "border-[var(--liiiraa-color-focus)] bg-[var(--liiiraa-color-surface-selected)]"
+            ),
+            attributes: {
+              id: `${id}-${tab.id}`,
+              type: "button",
+              role: "tab",
+              disabled: tab.disabled ? true : undefined,
+              "aria-controls": tab.panelId,
+              "aria-selected": selected ? "true" : "false",
+              "data-selected": selected ? "true" : undefined,
+              "data-variant": selected ? "secondary" : "ghost",
+              tabIndex: selected && !tab.disabled ? 0 : -1
+            },
+            parts: {
+              ...(tab.icon ? { icon: iconPart(tab.icon) } : {}),
+              label: {
+                element: "span",
+                className: "min-w-0 truncate",
+                content: tab.label
+              }
+            }
+          }
+        ];
+      })
+    )
+  };
+}
+
+export function createTogglePrimitive(options: TogglePrimitiveOptions): PrimitiveDefinition {
+  const id = options.id ?? toId(`toggle-${options.label}`);
+
+  return {
+    id,
+    primitive: "toggle",
+    element: "button",
+    className: "liiiraa-toggle",
+    attributes: {
+      id,
+      type: "button",
+      role: "switch",
+      disabled: options.disabled ? true : undefined,
+      title: options.description,
+      "aria-checked": options.pressed ? "true" : "false",
+      "aria-label": options.label,
+      "aria-describedby": options.description ? `${id}-description` : undefined,
+      "aria-pressed": options.pressed ? "true" : "false",
+      "data-liiiraa-primitive": "toggle"
+    },
+    parts: {
+      label: {
+        element: "span",
+        className: srOnlyClass,
+        content: options.label
+      },
+      ...(options.description
+        ? {
+            description: {
+              element: "span",
+              className: srOnlyClass,
+              attributes: {
+                id: `${id}-description`
+              },
+              content: options.description
+            }
+          }
+        : {})
+    }
+  };
+}
+
+export function createStateBadgePrimitive(options: StateBadgePrimitiveOptions): PrimitiveDefinition {
+  const tone = options.tone ?? "neutral";
+  const id = options.id ?? toId(`state-${tone}-${options.label}`);
+
+  return {
+    id,
+    primitive: "state-badge",
+    element: "span",
+    className: compactClasses("liiiraa-state-badge", toneClassNames[tone]),
+    attributes: {
+      id,
+      title: options.detail,
+      "aria-label": options.detail ? `${options.label}: ${options.detail}` : options.label,
+      "data-liiiraa-primitive": "state-badge",
+      "data-tone": tone
+    },
+    parts: {
+      ...(options.icon ? { icon: iconPart(options.icon) } : {}),
+      label: {
+        element: "span",
+        className: "min-w-0 truncate",
+        content: options.label
+      }
+    }
+  };
+}
+
+export function createTrustBadgePrimitive(options: TrustBadgePrimitiveOptions): PrimitiveDefinition {
+  const tone = options.tone ?? "trust";
+  const id = options.id ?? toId(`trust-${options.label}-${options.value}`);
+
+  return {
+    id,
+    primitive: "trust-badge",
+    element: "span",
+    className: compactClasses("liiiraa-trust-badge", toneClassNames[tone]),
+    attributes: {
+      id,
+      title: options.detail,
+      "aria-label": `${options.label}: ${options.value}. ${options.detail}`,
+      "data-liiiraa-primitive": "trust-badge",
+      "data-tone": tone
+    },
+    parts: {
+      icon: iconPart(options.icon ?? "shield-check"),
+      body: {
+        element: "span",
+        className: "grid min-w-0 gap-0.5",
+        parts: {
+          label: {
+            element: "span",
+            className: "truncate text-[length:var(--text-liiiraa-caption)]",
+            content: options.label
+          },
+          value: {
+            element: "span",
+            className: "truncate font-semibold text-[var(--liiiraa-color-text-primary)]",
+            content: options.value
+          }
+        }
+      }
+    }
+  };
+}
+
+export function createBenchmarkDeltaPrimitive(options: BenchmarkDeltaPrimitiveOptions): PrimitiveDefinition {
+  const tone = options.tone ?? "benchmark";
+  const id = options.id ?? toId(`delta-${options.label}`);
+  const width = `${Math.min(100, Math.max(6, Math.round((options.width ?? 0.72) * 100)))}%`;
+
+  return {
+    id,
+    primitive: "benchmark-delta",
+    element: "article",
+    className: "liiiraa-benchmark-delta",
+    attributes: {
+      id,
+      "aria-label": `${options.label}: ${options.before} to ${options.after}. ${options.delta}`,
+      "data-liiiraa-primitive": "benchmark-delta",
+      "data-tone": tone
+    },
+    parts: {
+      body: {
+        element: "span",
+        className: "grid min-w-0 gap-1",
+        parts: {
+          label: {
+            element: "span",
+            className: "truncate text-[length:var(--text-liiiraa-caption)] text-[var(--liiiraa-color-text-muted)]",
+            content: options.label
+          },
+          track: {
+            element: "span",
+            className: "liiiraa-benchmark-delta__track",
+            attributes: {
+              "aria-hidden": "true"
+            },
+            parts: {
+              fill: {
+                element: "span",
+                className: "block h-full bg-[var(--liiiraa-color-benchmark)]",
+                attributes: {
+                  style: `width: ${width}`
+                }
+              }
+            }
+          }
+        }
+      },
+      value: {
+        element: "span",
+        className: "grid min-w-0 justify-items-end gap-1 font-[var(--liiiraa-font-metric)]",
+        parts: {
+          after: {
+            element: "span",
+            className: "text-[var(--liiiraa-color-text-primary)]",
+            content: options.after
+          },
+          delta: {
+            element: "span",
+            className: compactClasses("text-[length:var(--text-liiiraa-caption)]", toneClassNames[tone]),
+            content: options.delta
+          }
+        }
+      }
+    }
+  };
+}
+
+export function createProofTilePrimitive(options: ProofTilePrimitiveOptions): PrimitiveDefinition {
+  const tone = options.tone ?? "benchmark";
+  const id = options.id ?? toId(`proof-${options.label}`);
+
+  return {
+    id,
+    primitive: "proof-tile",
+    element: "article",
+    className: "liiiraa-proof-tile",
+    attributes: {
+      id,
+      "aria-label": `${options.label}: ${options.metric}. ${options.detail}`,
+      "data-liiiraa-primitive": "proof-tile",
+      "data-tone": tone
+    },
+    parts: {
+      label: {
+        element: "span",
+        className: "text-[length:var(--text-liiiraa-caption)] font-semibold text-[var(--liiiraa-color-text-muted)]",
+        content: options.label
+      },
+      metric: {
+        element: "output",
+        className: compactClasses("font-[var(--liiiraa-font-metric)] text-[length:var(--text-liiiraa-section)] font-bold", toneClassNames[tone]),
+        content: options.metric
+      },
+      detail: {
+        element: "span",
+        className: "text-[length:var(--text-liiiraa-caption)] leading-snug text-[var(--liiiraa-color-text-secondary)]",
+        content: options.detail
+      },
+      ...(options.sourceLabel
+        ? {
+            source: createStateBadgePrimitive({
+              label: options.sourceLabel,
+              tone: "neutral",
+              icon: "info"
+            })
+          }
+        : {})
+    }
+  };
+}
+
+export function createCardPrimitive(options: CardPrimitiveOptions): PrimitiveDefinition {
+  const tone = options.tone ?? "neutral";
+  const id = options.id ?? toId(`card-${options.title}`);
+
+  return {
+    id,
+    primitive: "card",
+    element: "article",
+    className: "liiiraa-card",
+    attributes: {
+      id,
+      "aria-label": options.label,
+      "data-liiiraa-primitive": "card",
+      "data-tone": tone
+    },
+    parts: {
+      ...(options.eyebrow
+        ? {
+            eyebrow: {
+              element: "span",
+              className: compactClasses("text-[length:var(--text-liiiraa-caption)] font-semibold uppercase", toneClassNames[tone]),
+              content: options.eyebrow
+            }
+          }
+        : {}),
+      title: {
+        element: "span",
+        className: "font-semibold text-[var(--liiiraa-color-text-primary)]",
+        content: options.title
+      },
+      ...(options.description
+        ? {
+            description: {
+              element: "span",
+              className: "text-[length:var(--text-liiiraa-caption)] leading-snug text-[var(--liiiraa-color-text-secondary)]",
+              content: options.description
+            }
+          }
+        : {}),
+      ...(options.actions && options.actions.length > 0
+        ? {
+            actions: {
+              element: "div",
+              className: "flex flex-wrap gap-2",
+              parts: Object.fromEntries(options.actions.map((action) => [action.id ?? toId(action.label), createButtonPrimitive(action)]))
+            }
+          }
+        : {})
+    }
+  };
+}
+
+export function createCategoryLanePrimitive(options: CategoryLanePrimitiveOptions): PrimitiveDefinition {
+  const tone = options.tone ?? "active";
+  const id = options.id ?? toId(`lane-${options.title}`);
+
+  return {
+    id,
+    primitive: "category-lane",
+    element: "article",
+    className: "liiiraa-category-lane",
+    attributes: {
+      id,
+      "aria-label": `${options.title}: ${options.summary}`,
+      "data-liiiraa-primitive": "category-lane",
+      "data-tone": tone
+    },
+    parts: {
+      body: {
+        element: "div",
+        className: "grid min-w-0 gap-2",
+        parts: {
+          heading: {
+            element: "span",
+            className: "inline-flex min-w-0 items-center gap-2 font-semibold text-[var(--liiiraa-color-text-primary)]",
+            parts: {
+              ...(options.icon ? { icon: iconPart(options.icon) } : {}),
+              label: {
+                element: "span",
+                className: "truncate",
+                content: options.title
+              }
+            }
+          },
+          summary: {
+            element: "span",
+            className: "text-[length:var(--text-liiiraa-caption)] leading-snug text-[var(--liiiraa-color-text-secondary)]",
+            content: options.summary
+          },
+          state: {
+            element: "div",
+            className: "flex flex-wrap gap-2",
+            parts: {
+              status: createStateBadgePrimitive({ label: options.status, tone, icon: "activity" }),
+              trust: createStateBadgePrimitive({ label: options.trustSignal, tone: "trust", icon: "shield-check" })
+            }
+          }
+        }
+      },
+      actions: {
+        element: "div",
+        className: "flex flex-wrap items-start justify-end gap-2",
+        parts: {
+          primary: createButtonPrimitive(options.primaryAction),
+          ...(options.detailAction ? { detail: createButtonPrimitive(options.detailAction) } : {})
+        }
+      }
+    }
+  };
+}
+
+export function createDrawerPrimitive(options: DrawerPrimitiveOptions): PrimitiveDefinition {
+  const tone = options.tone ?? "neutral";
+  const id = options.id ?? toId(`drawer-${options.title}`);
+
+  return {
+    id,
+    primitive: "drawer",
+    element: "section",
+    className: "liiiraa-drawer",
+    attributes: {
+      id,
+      role: "region",
+      "aria-label": options.label,
+      "data-liiiraa-primitive": "drawer",
+      "data-open": options.open ? "true" : "false",
+      "data-tone": tone
+    },
+    parts: {
+      header: {
+        element: "div",
+        className: "grid min-w-0 gap-1",
+        parts: {
+          title: {
+            element: "span",
+            className: "font-semibold text-[var(--liiiraa-color-text-primary)]",
+            content: options.title
+          },
+          ...(options.description
+            ? {
+                description: {
+                  element: "span",
+                  className: "text-[length:var(--text-liiiraa-caption)] leading-snug text-[var(--liiiraa-color-text-secondary)]",
+                  content: options.description
+                }
+              }
+            : {})
+        }
+      },
+      ...(options.actions && options.actions.length > 0
+        ? {
+            actions: {
+              element: "div",
+              className: "flex flex-wrap gap-2",
+              parts: Object.fromEntries(options.actions.map((action) => [action.id ?? toId(action.label), createButtonPrimitive(action)]))
+            }
+          }
+        : {})
+    }
+  };
+}
+
 export function createPrimitiveStoryFixtures(): PrimitiveDefinition[] {
   return [
     createStatusStripPrimitive({
-      label: "System status",
+      label: tOptimizer("primitives.systemStatus"),
       items: [
-        { id: "signed", label: "Trust", value: "Signed by Liiiraa", tone: "success", icon: "shield-check" },
-        { id: "scan", label: "Scan", value: "Ready", tone: "active", icon: "activity" },
-        { id: "rollback", label: "Rollback", value: "Available", tone: "neutral", icon: "history" }
+        {
+          id: "signed",
+          label: tOptimizer("labels.trust"),
+          value: tOptimizer("brand.signedBy"),
+          tone: "success",
+          icon: "shield-check"
+        },
+        {
+          id: "scan",
+          label: tOptimizer(optimizerGlossaryKeys.scan),
+          value: tOptimizer("labels.ready"),
+          tone: "active",
+          icon: "activity"
+        },
+        {
+          id: "rollback",
+          label: tOptimizer(optimizerGlossaryKeys.rollback),
+          value: tOptimizer("labels.available"),
+          tone: "neutral",
+          icon: "history"
+        }
       ]
     }),
     createMetricTilePrimitive({
@@ -638,7 +1241,7 @@ export function createPrimitiveStoryFixtures(): PrimitiveDefinition[] {
       description: "Last benchmark comparison with metadata attached."
     }),
     createModeSegmentedControlPrimitive({
-      label: "Optimization mode",
+      label: tOptimizer("modes.optimizationMode"),
       value: "safe"
     }),
     createRiskBadgePrimitive({
@@ -646,23 +1249,110 @@ export function createPrimitiveStoryFixtures(): PrimitiveDefinition[] {
       detail: "Requires explicit review, backup, and rollback."
     }),
     createToolbarPrimitive({
-      label: "Plan actions",
+      label: tOptimizer("primitives.planActions"),
       actions: [
-        { label: "Apply safe plan", icon: "play", tooltip: "Apply only safe reversible changes.", variant: "secondary" },
-        { label: "Rollback session", icon: "rotate-ccw", tooltip: "Restore the previous optimization session.", variant: "ghost" },
         {
-          label: "Inspect lab items",
+          label: tOptimizer("actions.applySafePlan"),
+          icon: "play",
+          tooltip: tOptimizer("tooltips.applySafePlan"),
+          variant: "secondary"
+        },
+        {
+          label: tOptimizer("actions.restoreAll"),
+          icon: "rotate-ccw",
+          tooltip: tOptimizer("tooltips.rollbackSession"),
+          variant: "ghost"
+        },
+        {
+          label: tOptimizer("actions.inspectLabItems"),
           icon: "flask-conical",
-          tooltip: "Open Lab-only recommendations without applying them.",
+          tooltip: tOptimizer("tooltips.inspectLab"),
           variant: "ghost",
           state: { disabled: true }
         }
       ]
     }),
+    createTabListPrimitive({
+      label: "Optimizer detail views",
+      value: "summary",
+      tabs: [
+        { id: "summary", label: "Summary", panelId: "panel-summary", icon: "gauge" },
+        { id: "advanced", label: "Advanced", panelId: "panel-advanced", icon: "sliders-horizontal" },
+        { id: "rollback", label: "Rollback", panelId: "panel-rollback", icon: "history" }
+      ]
+    }),
+    createTogglePrimitive({
+      label: "Show lab controls",
+      pressed: false,
+      description: "Keeps experimental changes out of the default apply path."
+    }),
+    createCategoryLanePrimitive({
+      title: "Game Mode",
+      summary: "Detected profile, GPU policy, benchmark prompt, and safe launch-state checks.",
+      status: "Ready",
+      trustSignal: "Rollback capable",
+      tone: "active",
+      icon: "gauge",
+      primaryAction: {
+        label: "Optimize game",
+        variant: "primary",
+        leadingIcon: "play"
+      },
+      detailAction: {
+        label: "Review details",
+        variant: "secondary",
+        leadingIcon: "info"
+      }
+    }),
+    createProofTilePrimitive({
+      label: "Benchmark preview",
+      metric: "+11.8%",
+      detail: "Example 1% low delta with hardware context attached before publication.",
+      sourceLabel: "Example data"
+    }),
+    createBenchmarkDeltaPrimitive({
+      label: "1% low",
+      before: "82 FPS",
+      after: "92 FPS",
+      delta: "+12.2%",
+      width: 0.76
+    }),
+    createTrustBadgePrimitive({
+      label: tOptimizer("labels.trust"),
+      value: tOptimizer("brand.signedBy"),
+      detail: "Release, catalog, and rollback state share the same trust grammar."
+    }),
+    createDrawerPrimitive({
+      label: "Advanced optimization inspector",
+      title: "Before and after values",
+      description: "Dense tweak details stay behind a deliberate secondary entry point.",
+      actions: [
+        {
+          label: "Close",
+          variant: "ghost"
+        },
+        {
+          label: "Apply reviewed",
+          variant: "primary",
+          leadingIcon: "check"
+        }
+      ]
+    }),
     createButtonPrimitive({
-      label: "Export plan",
+      label: tOptimizer("actions.exportPlan"),
       variant: "secondary",
       leadingIcon: "sliders-horizontal"
+    }),
+    createButtonPrimitive({
+      label: "Restore previous plan",
+      variant: "rollback",
+      leadingIcon: "rotate-ccw"
+    }),
+    createButtonPrimitive({
+      label: "Locked until scan completes",
+      variant: "locked",
+      leadingIcon: "lock",
+      state: { locked: true }
     })
   ];
 }
@@ -686,12 +1376,12 @@ const renderAttributes = (attributes: PrimitiveAttributes | undefined) => {
     .join(" ");
 };
 
-const renderPart = (part: PrimitivePart) => {
+const renderPart = (part: PrimitivePart): string => {
   const attributes = renderAttributes({
     ...part.attributes,
     class: part.className
   });
-  const children = Object.values(part.parts ?? {}).map(renderPart).join("");
+  const children: string = Object.values(part.parts ?? {}).map(renderPart).join("");
   const content = part.content ? escapeHtml(part.content) : "";
 
   return `<${part.element}${attributes ? ` ${attributes}` : ""}>${content}${children}</${part.element}>`;
@@ -700,7 +1390,7 @@ const renderPart = (part: PrimitivePart) => {
 export function renderPrimitiveStoryHtml(definitions = createPrimitiveStoryFixtures()): string {
   const rendered = definitions.map(renderPart).join("");
 
-  return `<section data-liiiraa-story="primitives" aria-label="Liiiraa primitive story render">${rendered}</section>`;
+  return `<section data-liiiraa-story="primitives" aria-label="${escapeHtml(tOptimizer("primitives.storyAria"))}">${rendered}</section>`;
 }
 
 const getPartText = (part: PrimitivePart): string => {
@@ -776,6 +1466,23 @@ export function runPrimitiveA11ySmoke(definitions: PrimitiveDefinition[]): Primi
         if (checked.length !== 1) {
           issues.push({ id, message: "Radiogroups require exactly one selected option.", severity: "error" });
         }
+      }
+
+      if (role === "tablist") {
+        const tabs = Object.values(part.parts ?? {}).filter((child) => child.attributes?.role === "tab");
+        const selected = tabs.filter((child) => child.attributes?.["aria-selected"] === "true");
+
+        if (!part.attributes?.["aria-label"] && !part.attributes?.["aria-labelledby"]) {
+          issues.push({ id, message: "Tab lists require a label.", severity: "error" });
+        }
+
+        if (tabs.length === 0 || selected.length !== 1) {
+          issues.push({ id, message: "Tab lists require exactly one selected tab.", severity: "error" });
+        }
+      }
+
+      if (role === "switch" && part.attributes?.["aria-checked"] == null) {
+        issues.push({ id, message: "Toggle switches require aria-checked.", severity: "error" });
       }
     });
   }

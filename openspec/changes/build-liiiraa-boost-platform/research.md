@@ -1,0 +1,206 @@
+# Research Notes
+
+## Source Groups
+- Microsoft Windows performance and gaming docs:
+  - https://www.microsoft.com/en-us/windows/learning-center/optimize-pc-for-gaming-performance
+  - https://support.microsoft.com/en-us/windows/tips-to-improve-pc-performance-in-windows-b3b3ef5b-5953-fb6a-2528-4bbed82fba96
+  - https://support.microsoft.com/en-us/windows/optimizations-for-windowed-games-in-windows-11-3f006843-2c7e-4ed0-9a5e-f9389e535952
+  - https://devblogs.microsoft.com/directx/navigating-the-redesigned-graphics-settings-page/
+  - https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/powercfg-command-line-options
+  - https://learn.microsoft.com/en-us/windows-hardware/customize/power-settings/configure-processor-power-management-options
+  - https://devblogs.microsoft.com/performance-diagnostics/introducing-ecoqos/
+  - https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setprocessinformation
+  - https://learn.microsoft.com/en-us/windows/security/hardware-security/enable-virtualization-based-protection-of-code-integrity
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/bringup/device-guard-and-credential-guard
+  - https://learn.microsoft.com/defender-endpoint/navigate-defender-endpoint-antivirus-exclusions
+  - https://learn.microsoft.com/en-us/defender-endpoint/schedule-antivirus-scans
+  - https://support.microsoft.com/en-us/windows/delivery-optimization-in-windows-dbcaf188-0cf9-427a-b791-a7c5d740a48c
+  - https://support.microsoft.com/en-us/windows/search-indexing-in-windows-da061c83-af6b-095c-0f7a-4dfecda4d15a
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/windows-search-performance-issues
+  - https://learn.microsoft.com/en-us/windows/configuration/storage/storage-sense
+  - https://support.microsoft.com/en-us/windows/manage-drive-space-with-storage-sense-654f6ada-7bfc-45e5-966b-e24aded96ad5
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-behavior
+  - https://learn.microsoft.com/en-us/gaming/gdk/docs/features/console/storage/directstorage/directstorage-overview
+  - https://learn.microsoft.com/en-us/powershell/module/storage/optimize-volume
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/network/introduction-to-receive-side-scaling
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/network/overview-of-receive-segment-coalescing
+  - https://learn.microsoft.com/en-us/powershell/module/netadapter/set-netadapterrsc
+  - https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface
+  - https://learn.microsoft.com/en-us/windows-hardware/drivers/network/performance-in-network-adapters
+- PUBG official:
+  - https://support.pubg.com/hc/en-us/articles/900002196723-GENERAL-CRASHING-AND-PERFORMANCE-GUIDE
+  - https://support.pubg.com/hc/en-us/articles/115002108373-What-are-the-minimum-and-recommended-requirements-to-play-PUBG
+  - https://www.pubg.com/en-asia/news/1369
+- BattlEye:
+  - https://www.battleye.com/support/faq/
+  - https://www.battleye.com/support/
+- NVIDIA:
+  - https://developer.download.nvidia.com/NVAPI/NVIDIA_Driver_Settings_PG-12072-001_v01.pdf
+  - https://www.nvidia.com/content/Control-Panel-Help/vLatest/en-us/mergedProjects/3D%20Settings/Manage_3D_Settings_%28reference%29.htm
+  - https://nvidia.custhelp.com/app/answers/detail/a_id/3130
+  - https://nvidia.custhelp.com/app/answers/detail/a_id/4958/
+  - https://www.nvidia.com/en-us/geforce/news/reflex-low-latency-platform/
+  - https://www.nvidia.com/en-us/geforce/news/geforce-rtx-30-series-resizable-bar-support/
+  - https://www.nvidia.com/en-us/geforce/news/nvidia-frameview-power-and-performance-benchmarking-app-download/
+  - https://developer.nvidia.com/blog/understanding-and-measuring-pc-latency/
+  - https://www.nvidia.com/en-us/geforce/news/gfecnt/20246/nvidia-app-beta-update-av1-performance-tuning/
+  - https://github.com/Orbmu2k/nvidiaProfileInspector
+- Intel CPU:
+  - https://www.intel.com/content/www/us/en/support/articles/000095419/processors.html
+  - https://www.intel.com/content/www/us/en/developer/articles/technical/optimizing-threading-for-gaming-performance.html
+  - https://www.intel.com/content/www/us/en/gaming/resources/overclocking-xtu-guide.html
+- AMD:
+  - https://www.amd.com/en/products/software/adrenalin/hypr-rx.html
+  - https://www.amd.com/en/resources/support-articles/faqs/DH3-033.html
+  - https://www.amd.com/en/products/software/adrenalin/software-enhancedsync.html
+  - https://www.amd.com/en/products/software/adrenalin/radeon-boost.html
+  - https://www.amd.com/en/products/graphics/technologies/freesync.html
+  - https://www.amd.com/en/products/software/adrenalin/afmf.html
+  - https://www.amd.com/en/products/software/adrenalin/radeon-software-chill.html
+  - https://www.amd.com/en/products/software/ryzen-master.html
+  - https://www.amd.com/en/gaming/technologies/smart-technologies.html
+  - https://www.amd.com/content/dam/amd/en/documents/products/software-tools/faq-curve-optimizer.pdf
+- Open-source optimizer references:
+  - https://github.com/Atlas-OS/Atlas
+  - https://atlasos.net/
+  - https://github.com/meetrevision/playbook
+  - https://revi.cc/docs/features
+  - https://github.com/imribiy/XOS
+  - https://github.com/imribiy/useful-regs-bats
+  - https://github.com/imribiy/amd-gpu-tweaks
+  - https://github.com/imribiy/group-policy-library
+- Measurement references:
+  - https://presentmon.com/
+  - https://github.com/GameTechDev/PresentMon
+  - https://github.com/GameTechDev/PresentMon/blob/main/README-CaptureApplication.md
+  - https://www.intel.com/content/www/us/en/support/articles/000100898/graphics.html
+  - https://github.com/FR33THYFR33THY/Debunking-Custom-ISOS-And-Windows-Optimizations
+  - https://blurbusters.com/howto-low-lag-vsync-on/
+- Stack references:
+  - https://tauri.app/
+  - https://v2.tauri.app/plugin/updater/
+  - https://v2.tauri.app/security/capabilities/
+  - https://v2.tauri.app/security/permissions/
+  - https://v2.tauri.app/security/runtime-authority/
+  - https://tauri.app/security/csp/
+  - https://v2.tauri.app/concept/size/
+  - https://tauri.app/develop/sidecar/
+  - https://specta.dev/docs/tauri-specta
+  - https://trpc.io/
+  - https://neon.com/docs/introduction
+  - https://neon.com/docs/connect/connection-pooling
+  - https://orm.drizzle.team/docs/tutorials/drizzle-with-neon
+  - https://turborepo.com/docs
+  - https://docs.pnpm.io/workspaces
+  - https://playwright.dev/docs/intro
+  - https://vite.dev/guide/performance/
+- Development workflow references:
+  - https://www.conventionalcommits.org/en/v1.0.0/
+  - https://commitlint.js.org/
+  - https://typicode.github.io/husky/
+  - https://github.com/lint-staged/lint-staged
+  - https://docs.github.com/github/authenticating-to-github/managing-commit-signature-verification/about-commit-signature-verification
+  - https://docs.github.com/articles/enabling-required-commit-signing
+  - https://docs.github.com/en/actions/reference/security/secure-use
+  - https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/about-artifact-attestations
+  - https://docs.github.com/en/code-security/concepts/secret-security/about-secret-scanning
+  - https://docs.github.com/en/code-security/concepts/supply-chain-security/about-dependabot-alerts
+- Visual/accessibility references:
+  - https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html
+  - https://www.w3.org/TR/WCAG22/#target-size-minimum
+  - https://primer.style/product/components/tooltip/guidelines/
+  - https://developer.android.com/reference/kotlin/androidx/compose/material3/IconButton
+- Security references:
+  - https://owasp.org/www-project-application-security-verification-standard/
+  - https://owasp.org/API-Security/editions/2023/en/0x11-t10/
+  - https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation
+  - https://learn.microsoft.com/en-us/windows/msix/
+  - https://learn.microsoft.com/en-us/entra/identity-platform/secure-least-privileged-access
+  - https://rustsec.org/
+  - https://doc.rust-lang.org/clippy/lints.html
+
+## Key Findings
+- AtlasOS and ReviOS are strongest as architectural inspiration: transparent playbooks, configurable options, rollback thinking, and separation of performance/privacy/usability/security changes.
+- XOS public GitHub content is not enough for full audit; related imribiy repos are useful research material but must not be blindly imported.
+- Microsoft officially documents ordinary performance improvements: updates, drivers, background apps, storage cleanup, power mode, and windowed game optimization.
+- Microsoft also documents Memory Integrity/VBS as security features with compatibility/performance tradeoffs. These can be offered only as explicit Competitive/Lab choices.
+- PUBG official support recommends removing old Steam launch options, updating Windows/GPU drivers, verifying files, clean driver reinstall when needed, and disabling fullscreen optimization only in troubleshooting context.
+- PUBG patch notes state DX11 Enhanced is optimized for CPU/rendering and may increase FPS, but it must remain benchmarked per machine.
+- BattlEye disallows or warns about kernel debugging, test signing, hacked kernels, broken permissions, blocked BE services, and some low-level software. The app must avoid anything that resembles anti-cheat bypass or game memory tampering.
+- NVIDIA supports per-application driver profiles; application profiles override global settings. NPI can export/import `.nip` but hidden settings can be driver-specific or risky.
+- FR33THY-style benchmarking suggests many custom ISO gains fall inside benchmark variation on modern hardware. The product must measure real before/after deltas and focus on frametime/latency, not only average FPS.
+- Tauri 2 capabilities and permissions are central to desktop security. Frontend compromise must not imply unrestricted access to local files, shell, registry, or privileged commands.
+- Tauri updater requires signatures and cannot disable update signature verification; private signing keys must never ship in the app.
+- Windows distribution needs code-signing planning because SmartScreen reputation is a real product trust issue, not only a technical build detail.
+- OWASP ASVS and OWASP API Security Top 10 are appropriate baselines for the cloud API, even before auth/billing ships.
+- RustSec/cargo-audit and Clippy should be part of the Rust supply-chain and correctness baseline.
+- Vite and Tauri performance docs support a design focused on minimal dependencies, lazy loading, command allowlists, and keeping heavy work out of the UI process.
+- Intel APO is current and official, but requires supported processors, Windows 11, BIOS/DTT/platform package readiness, and game support or limited Advanced Mode. Liiiraa Booster should detect readiness and guide users, not fake APO through affinity hacks.
+- Intel's own gaming threading guidance warns against assuming P-core-only or hard affinity is always better; the app should avoid disabling E-cores and prefer benchmarked, OS-friendly scheduling.
+- AMD Ryzen Master/PBO/Curve Optimizer are real performance paths but involve warranty/stability/heat risk. V1 should make them Lab/advisory, not automatic.
+- AMD X3D/multi-CCD gaming performance depends on chipset/scheduler/Game Mode readiness. V1 should detect and repair/recommend official driver paths before any workaround.
+- AMD Smart Access Memory and NVIDIA Resizable BAR can improve some games and regress others. V1 should detect, recommend official BIOS/driver enablement, and keep hidden/forced profile overrides in Lab.
+- AMD Anti-Lag/Boost/Chill/Enhanced Sync and NVIDIA Reflex/Low Latency/Max Frame Rate are situational. Competitive presets must choose latency-first policies and avoid stacking contradictory driver/in-game limiters blindly.
+- The final hardening pass adds conflict validation as a core requirement. Modern performance settings interact: Reflex/LLM/frame caps/VRR/V-SYNC/framegen on NVIDIA; HYPR-RX/Anti-Lag/Boost/Chill/Enhanced Sync/FreeSync/AFMF/FRTC on AMD; GameDVR/FSO/HDR/ICC/overlays on Windows.
+- Microsoft EcoQoS gives the app itself a way to avoid stealing CPU from the game while background scans run. The optimizer should be self-throttling during gameplay.
+- Microsoft RSC/offload guidance supports these features for throughput/CPU overhead, not as universal lower-latency gaming toggles. V1 should keep adapter network tweaks Lab-only unless they are power-saving toggles with clear backup.
+- Microsoft storage and fsutil docs support safe inspection, TRIM, Storage Sense, last-access, and 8.3 decisions. Unsupported consumer NVMe driver registry hacks are blocked.
+- NVIDIA FrameView/PresentMon references reinforce that benchmark proof should include latency/power/frametime metrics and should label measurement limits.
+- AMD documentation frames Radeon Chill as optional frame-rate regulation/power behavior with overlap near frame caps/FRTC. V1 should validate AMD feature combinations instead of stacking Chill, Anti-Lag, Boost, Enhanced Sync, AFMF, and frame caps blindly.
+- WinUtil issue research shows GameDVR/FSO-related changes can create confusing color-management side effects in exclusive fullscreen. V1 now requires display/color pipeline detection and user warning.
+- Conventional Commits gives machine-readable history for changelogs, semantic versioning, and AI handoff. It also encourages small organized commits instead of broad mixed changes.
+- GitHub supports GPG, SSH, and S/MIME commit signatures, and branch protection/repository rules can require signed commits.
+- GitHub Actions security guidance recommends least-privilege `GITHUB_TOKEN`, careful secret handling, mitigation of script injection, and pinning third-party actions by full commit SHA for immutable references.
+- GitHub artifact attestations and Dependabot/secret scanning are appropriate supply-chain controls for a signed desktop product.
+- WCAG 2.2 target size, focus visibility, and non-text contrast should influence the dark UI from the beginning so the strong visual style does not sacrifice usability.
+
+## Final V1 Tweak Research Synthesis
+- Atlas contributes useful patterns for a reversible performance power plan, power throttling visibility, USB/PCIe/NVMe/NIC power-saving controls, GameDVR/FSO controls, VBS current-state inspection, and explicit toolbox-style toggles. For Liiiraa Booster these become typed, backed-up tweaks, not raw scripts.
+- ReviOS contributes useful examples for option-led tradeoffs, revert files, Win32PrioritySeparation/MMCSS candidates, GameDVR values, memory compression experiments, and VBS performance tradeoff language. Its Defender-disabled default and broad component removals are rejected for a commercial V1 default.
+- XOS/imribiy/HoneCtrl/WinUtil research expands the candidate list for AMD MPO/ULPS, timer resolution, service toggles, BCD tweaks, app removals, Windows Update controls, and NPI-style workflows. The V1 matrix keeps the measurable/reversible parts and blocks the invasive parts.
+- YouTube/viral gaming tweaks are not accepted directly. A tweak needs an official source, code-audited community source, measurable hypothesis, rollback path, and anti-cheat review before it can leave Lab mode.
+- V1 should optimize the whole PC, but the default flow must stay safe: power plan, scans, GameDVR/capture reduction, startup/background review, storage readiness, narrow Defender scheduling/exclusions, NIC power saving, GPU profile backups, PUBG detection, and benchmarks.
+- Competitive mode is where performance/security/power tradeoffs live: VBS/HVCI/VMP, HAGS, MMCSS/foreground scheduling, EEE/Green Ethernet, NVIDIA power/latency settings, AMD Anti-Lag/HYPR-RX, and PUBG DX/fullscreen benchmarks.
+- Lab mode exists for hardware-sensitive experiments: timer resolution, memory compression, core parking, RSC/offloads/interrupt moderation, AMD ULPS/MPO, DX12 experiments, and adapter-specific network tuning.
+- Blocked guardrails are product features, not missing features. The app must explicitly refuse unsafe optimizer folklore such as Defender disable, Windows Update disable, UAC disable, pagefile disable, system-file renames, kernel/test-signing/debug BCD changes, bulk registry packs, and anti-cheat tampering.
+
+## Impact Classification
+High potential:
+- driver updates/clean driver state
+- power plan and power throttling
+- background app/startup/process control
+- Game DVR/capture/overlay reduction
+- VBS/HVCI/VMP tradeoff, with explicit consent
+- GPU profile tuning
+- network adapter power saving off
+- PUBG DX mode/settings benchmark
+- thermal/throttling detection
+
+Medium or conditional:
+- MMCSS/SystemResponsiveness
+- Win32PrioritySeparation
+- NTFS last access and 8.3 naming
+- Search/SysMain/indexing behavior
+- Memory compression toggle
+- timer resolution per session
+- HAGS/VRR/windowed optimization
+- shader cache cleanup
+
+Low or cosmetic:
+- service host process count tweaks
+- boot menu style
+- wallpapers/themes
+- file associations
+- broad telemetry/privacy tweaks sold as FPS
+
+Dangerous by default:
+- disabling Defender entirely
+- disabling Windows Update entirely
+- disabling UAC
+- removing system components blindly
+- renaming RuntimeBroker/SearchApp/system files
+- disabling pagefile globally
+- aggressive BCD timer tweaks
+- CPU idle-state disabling without hardware context
+- bulk undocumented AMD/NVIDIA flags
+- disabling anti-cheat dependencies

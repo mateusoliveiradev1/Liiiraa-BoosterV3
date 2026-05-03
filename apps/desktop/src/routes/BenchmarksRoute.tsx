@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { optimizationWorkflow } from "../../../../packages/ui/src/optimizationWorkflow.js";
+import { desktopCommandCenterState } from "../adapters/desktopState";
 import { BenchmarkWorkflowView } from "../components/OptimizationWorkflow";
-import { createDefaultPrivacyConsentState, evaluateDesktopPrivacyGate } from "../privacyConsent";
+import { desktopChartCssVars, desktopToneCssVars } from "../designTokens";
 
 type WorkflowTone = "active" | "danger" | "lab" | "neutral" | "success" | "warning";
 
@@ -10,6 +10,7 @@ type BenchmarkPoint = {
   label: string;
   averageFps: number;
   onePercentLow: number;
+  pointOnePercentLow: number;
   p95FrameMs: number;
   tone: WorkflowTone;
 };
@@ -39,20 +40,17 @@ const SAMPLE_COUNT = 720;
 const VIRTUAL_ROW_COUNT = 18;
 
 const toneAccent: Record<WorkflowTone, string> = {
-  active: "#27d7ff",
-  danger: "#ff5a67",
-  lab: "#9b7cff",
-  neutral: "#9aa8b8",
-  success: "#3af28f",
-  warning: "#ffbd5a"
+  active: desktopToneCssVars.active,
+  danger: desktopToneCssVars.danger,
+  lab: desktopToneCssVars.lab,
+  neutral: desktopToneCssVars.neutral,
+  success: desktopToneCssVars.success,
+  warning: desktopToneCssVars.warning
 };
 
 export function BenchmarksRoute() {
-  const benchmarkData = optimizationWorkflow.gaming.benchmarks as BenchmarkData;
-  const benchmarkSyncGate = evaluateDesktopPrivacyGate({
-    consent: createDefaultPrivacyConsentState(),
-    kind: "benchmark-sync"
-  });
+  const benchmarkData = desktopCommandCenterState.routes.benchmarks as BenchmarkData;
+  const benchmarkSyncGate = desktopCommandCenterState.privacy.benchmarkSyncGate;
   const frameSamples = useMemo(() => createFrameSamples(benchmarkData.chart), [benchmarkData.chart]);
   const chartSamples = useMemo(
     () => downsampleFrameSamples(frameSamples, CHART_POINT_BUDGET),
@@ -68,7 +66,7 @@ export function BenchmarksRoute() {
 
   return (
     <div style={viewGridStyle}>
-      <BenchmarkWorkflowView data={optimizationWorkflow.gaming.benchmarks} />
+      <BenchmarkWorkflowView data={desktopCommandCenterState.routes.benchmarks} />
       <BenchmarkResultCharts
         chartSamples={chartSamples}
         data={benchmarkData}
@@ -219,7 +217,7 @@ function FrameRateTrend({ samples }: { samples: FrameSample[] }) {
           x2={width - pad.right}
           y1={pad.top}
           y2={pad.top}
-          stroke="#344252"
+          stroke={desktopChartCssVars.grid}
           strokeWidth="1"
         />
         <line
@@ -227,7 +225,7 @@ function FrameRateTrend({ samples }: { samples: FrameSample[] }) {
           x2={width - pad.right}
           y1={height - pad.bottom}
           y2={height - pad.bottom}
-          stroke="#344252"
+          stroke={desktopChartCssVars.grid}
           strokeWidth="1"
         />
         <line
@@ -235,22 +233,22 @@ function FrameRateTrend({ samples }: { samples: FrameSample[] }) {
           x2={pad.left}
           y1={pad.top}
           y2={height - pad.bottom}
-          stroke="#344252"
+          stroke={desktopChartCssVars.grid}
           strokeWidth="1"
         />
-        <text x="0" y={pad.top + 4} fill="#9aa8b8" fontSize="12">
+        <text x="0" y={pad.top + 4} fill={desktopChartCssVars.axis} fontSize="12">
           {maxFps} FPS
         </text>
-        <text x="0" y={height - pad.bottom + 4} fill="#9aa8b8" fontSize="12">
+        <text x="0" y={height - pad.bottom + 4} fill={desktopChartCssVars.axis} fontSize="12">
           {minFps} FPS
         </text>
         <polyline fill="none" points={baselinePoints} stroke={toneAccent.neutral} strokeWidth="3" />
         <polyline fill="none" points={safePlanPoints} stroke={toneAccent.active} strokeWidth="3" />
         <polyline fill="none" points={profilePoints} stroke={toneAccent.success} strokeWidth="3" />
-        <text x={pad.left} y={height - 8} fill="#9aa8b8" fontSize="12">
+        <text x={pad.left} y={height - 8} fill={desktopChartCssVars.axis} fontSize="12">
           0s
         </text>
-        <text x={width - pad.right - 46} y={height - 8} fill="#9aa8b8" fontSize="12">
+        <text x={width - pad.right - 46} y={height - 8} fill={desktopChartCssVars.axis} fontSize="12">
           300s
         </text>
       </svg>
@@ -264,7 +262,10 @@ function FrameRateTrend({ samples }: { samples: FrameSample[] }) {
 }
 
 function ResultComparisonBars({ points }: { points: BenchmarkPoint[] }) {
-  const maxFps = Math.max(...points.flatMap((point) => [point.averageFps, point.onePercentLow]), 1);
+  const maxFps = Math.max(
+    ...points.flatMap((point) => [point.averageFps, point.onePercentLow, point.pointOnePercentLow]),
+    1
+  );
   const maxFrameMs = Math.max(...points.map((point) => point.p95FrameMs), 1);
 
   return (
@@ -286,6 +287,12 @@ function ResultComparisonBars({ points }: { points: BenchmarkPoint[] }) {
             tone={point.tone}
             value={`${point.onePercentLow} FPS`}
             width={point.onePercentLow / maxFps}
+          />
+          <MetricBar
+            label="0.1% low"
+            tone={point.tone}
+            value={`${point.pointOnePercentLow} FPS`}
+            width={point.pointOnePercentLow / maxFps}
           />
           <MetricBar
             label="p95 frame"
@@ -353,7 +360,7 @@ function SampleLedger({
           title="Show previous frame samples"
           type="button"
         >
-          Previous
+          <span>Previous</span>
         </button>
         <button
           className="button button--secondary"
@@ -362,7 +369,7 @@ function SampleLedger({
           title="Show next frame samples"
           type="button"
         >
-          Next
+          <span>Next</span>
         </button>
         <span className="workflow-muted" style={windowSummaryStyle}>
           Rows {firstRow}-{lastRow} of {sampleCount.toLocaleString("en-US")}
@@ -607,7 +614,7 @@ const legendStyle: CSSProperties = {
 
 const legendItemStyle: CSSProperties = {
   alignItems: "center",
-  color: "#b6c2cf",
+  color: "var(--text-secondary)",
   display: "inline-flex",
   fontSize: "0.82rem",
   gap: "0.4rem"
@@ -645,8 +652,8 @@ const metricBarStyle: CSSProperties = {
 };
 
 const metricBarTrackStyle: CSSProperties = {
-  background: "#202b37",
-  border: "1px solid #344252",
+  background: desktopChartCssVars.track,
+  border: "1px solid var(--border)",
   borderRadius: "999px",
   display: "block",
   height: "0.72rem",
@@ -665,8 +672,8 @@ const windowSummaryStyle: CSSProperties = {
 };
 
 const sampleTableShellStyle: CSSProperties = {
-  border: "1px solid #2a3541",
-  borderRadius: "8px",
+  border: "1px solid var(--border-subtle)",
+  borderRadius: "var(--radius-card)",
   overflowX: "auto"
 };
 
@@ -676,8 +683,8 @@ const sampleTableStyle: CSSProperties = {
 };
 
 const sampleHeaderStyle: CSSProperties = {
-  background: "#10161d",
-  color: "#7d8a99",
+  background: "var(--surface-sunken)",
+  color: "var(--text-muted)",
   display: "grid",
   fontSize: "0.72rem",
   fontWeight: 800,
@@ -689,10 +696,10 @@ const sampleHeaderStyle: CSSProperties = {
 };
 
 const sampleRowStyle: CSSProperties = {
-  borderTop: "1px solid #2a3541",
-  color: "#b6c2cf",
+  borderTop: "1px solid var(--border-subtle)",
+  color: "var(--text-secondary)",
   display: "grid",
-  fontFamily: "\"JetBrains Mono\", \"Geist Mono\", Consolas, monospace",
+  fontFamily: "var(--font-metric)",
   fontSize: "0.78rem",
   gap: "0.75rem",
   gridTemplateColumns: "5rem repeat(5, minmax(6.5rem, 1fr))",

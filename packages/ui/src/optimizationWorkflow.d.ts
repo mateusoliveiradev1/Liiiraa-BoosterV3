@@ -158,6 +158,7 @@ export interface OptimizationWorkflowBenchmarkPoint {
   label: string;
   averageFps: number;
   onePercentLow: number;
+  pointOnePercentLow: number;
   p95FrameMs: number;
   tone: OptimizationWorkflowTone;
 }

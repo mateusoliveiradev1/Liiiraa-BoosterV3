@@ -1,7 +1,8 @@
 import {
   verifySignedCatalogEnvelope,
   type CatalogChannel,
-  type CatalogPublicKeyJwk
+  type CatalogPublicKeyJwk,
+  type CatalogValidationOptions
 } from "../../../packages/catalog/src/index.js";
 import { DEFAULT_CATALOG_PUBLIC_KEY_JWK } from "../../../packages/catalog/src/fixture.js";
 
@@ -65,10 +66,7 @@ export async function fetchLatestRemoteCatalog(
     }
 
     const envelope = await response.json();
-    const verified = await verifySignedCatalogEnvelope(envelope, {
-      allowedPrivilegedCommandIds: options.allowedPrivilegedCommandIds,
-      publicKeyJwk: options.publicKeyJwk ?? DEFAULT_CATALOG_PUBLIC_KEY_JWK
-    });
+    const verified = await verifySignedCatalogEnvelope(envelope, createCatalogValidationOptions(options));
 
     writeLastKnownGoodCatalog(options.storage, envelope);
 
@@ -82,10 +80,7 @@ export async function fetchLatestRemoteCatalog(
     const cached = readLastKnownGoodCatalog(options.storage);
 
     if (cached) {
-      const verified = await verifySignedCatalogEnvelope(cached, {
-        allowedPrivilegedCommandIds: options.allowedPrivilegedCommandIds,
-        publicKeyJwk: options.publicKeyJwk ?? DEFAULT_CATALOG_PUBLIC_KEY_JWK
-      });
+      const verified = await verifySignedCatalogEnvelope(cached, createCatalogValidationOptions(options));
 
       return {
         catalog: verified.payload,
@@ -115,6 +110,18 @@ export function readLastKnownGoodCatalog(storage: StorageLike | undefined = brow
 
 function writeLastKnownGoodCatalog(storage: StorageLike | undefined = browserStorage(), envelope: unknown) {
   storage?.setItem(CATALOG_CACHE_KEY, JSON.stringify(envelope));
+}
+
+function createCatalogValidationOptions(options: RemoteCatalogFetcherOptions): CatalogValidationOptions {
+  const validationOptions: CatalogValidationOptions = {
+    publicKeyJwk: options.publicKeyJwk ?? DEFAULT_CATALOG_PUBLIC_KEY_JWK
+  };
+
+  if (options.allowedPrivilegedCommandIds) {
+    validationOptions.allowedPrivilegedCommandIds = options.allowedPrivilegedCommandIds;
+  }
+
+  return validationOptions;
 }
 
 function browserStorage(): StorageLike | undefined {

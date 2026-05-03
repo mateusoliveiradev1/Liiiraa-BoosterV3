@@ -1,9 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="liiiraaFaviconTitle">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="liiiraaFaviconTitle">
   <title id="liiiraaFaviconTitle">Liiiraa Booster favicon</title>
-  <path d="M32 4 56 15v18c0 16-9 25-24 29C17 58 8 49 8 33V15L32 4Z" fill="#0f151c" stroke="#344252" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M13 22h9M11 31h9M14 40h8" fill="none" stroke="#3af28f" stroke-width="3.5" stroke-linecap="square"/>
-  <path d="M23 15h11v26h18v10H23V15Z" fill="#27d7ff"/>
-  <path d="M34 15h10L32 33h13L25 51l7-19h-9v-8h6l5-9Z" fill="#0b0f14"/>
-  <path d="M23 15h11v26h18v10H23V15Z" fill="none" stroke="#9eefff" stroke-width="1.5" stroke-linejoin="round"/>
-  <path d="M17 52h39" fill="none" stroke="#ffbd5a" stroke-width="2.5" stroke-linecap="square"/>
+  <defs>
+    <linearGradient id="liiiraaEdge" x1="76" y1="436" x2="436" y2="76" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#27d7ff"/>
+      <stop offset="0.48" stop-color="#3af28f"/>
+      <stop offset="1" stop-color="#a8ff4f"/>
+    </linearGradient>
+    <linearGradient id="liiiraaShell" x1="116" y1="84" x2="408" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#172525"/>
+      <stop offset="0.5" stop-color="#050909"/>
+      <stop offset="1" stop-color="#101c17"/>
+    </linearGradient>
+    <linearGradient id="liiiraaMetal" x1="184" y1="118" x2="326" y2="394" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.25" stop-color="#dce8e1"/>
+      <stop offset="0.62" stop-color="#56615e"/>
+      <stop offset="1" stop-color="#f2fff4"/>
+    </linearGradient>
+    <linearGradient id="liiiraaAccent" x1="160" y1="398" x2="386" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#27d7ff"/>
+      <stop offset="0.48" stop-color="#3af28f"/>
+      <stop offset="1" stop-color="#a8ff4f"/>
+    </linearGradient>
+  </defs>
+  <path d="M76 154 L154 76 H318 L436 194 V318 L318 436 H154 L76 358 Z" fill="url(#liiiraaShell)" stroke="url(#liiiraaEdge)" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M122 178 L178 122 H300 L390 212 V300 L300 390 H178 L122 334 Z" fill="none" stroke="#eafff1" stroke-width="4" stroke-linejoin="round" opacity="0.28"/>
+  <path d="M212 118 H320 L274 286 H384 L322 394 H158 Z" fill="#020707" opacity="0.52"/>
+  <path d="M198 116 H318 L270 292 H382 L318 396 H160 Z" fill="url(#liiiraaMetal)" stroke="#f4fff6" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M166 394 H318 L382 292" fill="none" stroke="url(#liiiraaAccent)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -1063,6 +1063,7 @@ export const optimizationWorkflow = {
           label: "Baseline",
           averageFps: 176,
           onePercentLow: 127,
+          pointOnePercentLow: 91,
           p95FrameMs: 10.2,
           tone: "neutral"
         },
@@ -1071,6 +1072,7 @@ export const optimizationWorkflow = {
           label: "Safe plan",
           averageFps: 184,
           onePercentLow: 136,
+          pointOnePercentLow: 99,
           p95FrameMs: 9.3,
           tone: "active"
         },
@@ -1079,6 +1081,7 @@ export const optimizationWorkflow = {
           label: "PUBG profile",
           averageFps: 188,
           onePercentLow: 142,
+          pointOnePercentLow: 106,
           p95FrameMs: 8.8,
           tone: "success"
         }

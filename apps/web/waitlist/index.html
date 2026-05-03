@@ -6,6 +6,7 @@
     <meta name="description" content="Liiiraa Booster waitlist placeholder." />
     <title>Liiiraa Booster Waitlist</title>
     <link rel="icon" href="../public/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../theme.generated.css" />
     <link rel="stylesheet" href="../styles.css" />
   </head>
   <body>
@@ -15,10 +16,10 @@
         <span>Liiiraa Booster</span>
       </a>
       <nav class="site-nav" aria-label="Placeholder navigation">
+        <a href="../#modules">Modules</a>
+        <a href="../#games">Games</a>
         <a href="../#proof">Proof</a>
-        <a href="../#pc-wide">PC-wide</a>
-        <a href="../#pubg">PUBG</a>
-        <a href="../#trust">Trust</a>
+        <a href="../#faq">FAQ</a>
       </nav>
       <a class="nav-cta" href="../">Landing</a>
     </header>
@@ -35,6 +36,28 @@
         <div class="hero__actions" aria-label="Waitlist actions">
           <a class="button button--primary" href="../">Back to landing</a>
           <a class="button button--secondary" href="../#trust">Review trust notes</a>
+        </div>
+        <form class="waitlist-form" action="#" aria-describedby="waitlist-note">
+          <label for="waitlist-email">Email for launch notice</label>
+          <div class="waitlist-form__row">
+            <input
+              id="waitlist-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="you@example.com"
+              required
+            />
+            <button class="button button--primary" type="submit">Notify me</button>
+          </div>
+          <p id="waitlist-note">
+            Email capture is a preview shell until auth and account services are connected.
+          </p>
+        </form>
+        <div class="access-status" aria-label="Access state">
+          <span class="button button--success">Waitlist route ready</span>
+          <span class="button button--secondary" data-state="loading" aria-busy="true">Checking build</span>
+          <span class="button button--locked" role="link" aria-disabled="true">Download pending</span>
         </div>
       </section>
     </main>

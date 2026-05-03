@@ -15,7 +15,9 @@
     <meta property="og:image" content="./public/social-preview.png" />
     <title>Liiiraa Booster</title>
     <link rel="icon" href="./public/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="./public/product-dashboard.png" as="image" />
     <link rel="preload" href="./public/social-preview.png" as="image" />
+    <link rel="stylesheet" href="./theme.generated.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -25,10 +27,10 @@
         <span>Liiiraa Booster</span>
       </a>
       <nav class="site-nav" aria-label="Landing sections">
+        <a href="#modules">Modules</a>
+        <a href="#games">Games</a>
         <a href="#proof">Proof</a>
-        <a href="#pc-wide">PC-wide</a>
-        <a href="#pubg">PUBG</a>
-        <a href="#trust">Trust</a>
+        <a href="#faq">FAQ</a>
       </nav>
       <a class="nav-cta" href="./waitlist/">Waitlist</a>
     </header>
@@ -37,80 +39,189 @@
       <section class="hero" id="top" aria-labelledby="hero-title">
         <div class="hero__grid" aria-hidden="true"></div>
         <div class="hero__content">
-          <p class="eyebrow">Windows performance instrument</p>
+          <p class="eyebrow">Windows optimizer preview</p>
           <h1 id="hero-title">Liiiraa Booster</h1>
           <p class="hero__lede">
-            A measured optimization command center for PC-wide tuning, NVIDIA and PUBG readiness, benchmark proof,
-            and rollback-first safety.
+            A rollback-first performance cockpit for safe Windows tuning, game profile readiness, benchmark review,
+            and clear one-click optimization.
           </p>
           <div class="hero__actions" aria-label="Primary actions">
             <a class="button button--primary" href="./waitlist/">Join waitlist</a>
-            <a class="button button--secondary" href="#proof">View proof</a>
+            <a class="button button--secondary" href="#modules">Explore modules</a>
           </div>
           <dl class="hero__stats" aria-label="Product safeguards">
             <div>
-              <dt>Apply model</dt>
-              <dd>Backup first</dd>
+              <dt>Apply path</dt>
+              <dd>Rollback first</dd>
             </div>
             <div>
-              <dt>Claims</dt>
-              <dd>Benchmarked</dd>
+              <dt>Proof label</dt>
+              <dd>Example data</dd>
             </div>
             <div>
-              <dt>Focus</dt>
-              <dd>PUBG ready</dd>
+              <dt>Game focus</dt>
+              <dd>PUBG preview</dd>
             </div>
           </dl>
         </div>
 
-        <figure class="app-visual" aria-label="Liiiraa Booster command center product visual">
-          <div class="app-visual__rail">
-            <img src="./public/logo-mark.svg" alt="" width="42" height="42" />
-            <span class="rail-dot rail-dot--active"></span>
-            <span class="rail-dot"></span>
-            <span class="rail-dot"></span>
-            <span class="rail-dot"></span>
+        <figure class="product-preview" aria-labelledby="product-preview-title">
+          <div class="product-preview__toolbar">
+            <span id="product-preview-title">Current desktop cockpit</span>
+            <span class="status-pill status-pill--success">Signed channel</span>
           </div>
-          <div class="app-visual__workspace">
-            <div class="app-visual__strip">
-              <span>Agent <strong>Idle</strong></span>
-              <span>Backups <strong>Ready</strong></span>
-              <span>Updater <strong>Signed</strong></span>
-            </div>
-            <div class="app-visual__header">
-              <div>
-                <p>Command Center</p>
-                <strong>84 readiness</strong>
-              </div>
-              <span>Safe mode</span>
-            </div>
-            <div class="app-visual__metrics">
-              <span><strong>+11.8%</strong> 1% low delta</span>
-              <span><strong>5</strong> rollback snapshots</span>
-              <span><strong>0</strong> unsafe defaults</span>
-            </div>
-            <div class="app-visual__chart" aria-hidden="true">
-              <span class="chart-grid"></span>
-              <span class="chart-line chart-line--base"></span>
-              <span class="chart-line chart-line--boost"></span>
-            </div>
-            <div class="app-visual__timeline">
-              <span>Scan complete</span>
-              <span>Plan generated</span>
-              <span>PUBG check ready</span>
-            </div>
+          <div class="product-preview__viewport">
+            <img
+              src="./public/product-dashboard.png"
+              alt="Liiiraa Booster dashboard showing readiness score, scan progress, category lanes, rollback status, and benchmark context"
+              width="1440"
+              height="2709"
+            />
           </div>
+          <figcaption>Live product screenshot from the current dashboard polish pass.</figcaption>
         </figure>
+      </section>
+
+      <section class="section section--path" id="one-click" aria-labelledby="path-title">
+        <div class="section__heading">
+          <p class="eyebrow">One-click path</p>
+          <h2 id="path-title">The main action stays simple, while review stays close.</h2>
+        </div>
+        <div class="path-grid">
+          <article>
+            <span class="step-index">01</span>
+            <h3>Read-only scan</h3>
+            <p>Driver, VRR, overlay, startup, service, power, and rollback state are checked before any write path.</p>
+            <a class="button button--secondary" href="#proof">View benchmark method</a>
+          </article>
+          <article>
+            <span class="step-index">02</span>
+            <h3>Safe plan</h3>
+            <p>Recommended changes stay separate from Competitive, Lab, blocked, and reboot-required work.</p>
+            <a class="button button--secondary" href="#modules">See modules</a>
+          </article>
+          <article>
+            <span class="step-index">03</span>
+            <h3>Apply with backup</h3>
+            <p>Each write-capable step keeps source, confidence, reboot notes, and restore context attached.</p>
+            <a class="button button--rollback" href="#trust">Review safety</a>
+          </article>
+          <article>
+            <span class="step-index">04</span>
+            <h3>Benchmark after</h3>
+            <p>Proof prompts compare lows, average FPS, and frametime variance only when context is available.</p>
+            <a class="button button--secondary" href="#proof">Open proof</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section--modules" id="modules" aria-labelledby="modules-title">
+        <div class="section__heading">
+          <p class="eyebrow">Optimization modules</p>
+          <h2 id="modules-title">Separated lanes replace the old dense feature grid.</h2>
+        </div>
+        <div class="module-grid" aria-label="Optimization module showcase">
+          <article>
+            <span class="module-tag module-tag--system">System</span>
+            <h3>Windows readiness</h3>
+            <p>Background load, services, storage pressure, reboot state, and safe operating mode.</p>
+            <a class="module-link" href="#one-click">One-click path</a>
+          </article>
+          <article>
+            <span class="module-tag module-tag--game">Game</span>
+            <h3>Game Mode</h3>
+            <p>Detected profile, launch/config state, anti-cheat boundary, and game benchmark prompt.</p>
+            <a class="module-link" href="#games">Supported games</a>
+          </article>
+          <article>
+            <span class="module-tag module-tag--network">Network</span>
+            <h3>Latency hygiene</h3>
+            <p>Adapter state, DNS notes, QoS-sensitive changes, and no hidden unsafe bulk writes.</p>
+            <a class="module-link" href="#trust">Safety notes</a>
+          </article>
+          <article>
+            <span class="module-tag module-tag--gpu">GPU</span>
+            <h3>NVIDIA profile</h3>
+            <p>Driver branch, Reflex, VRR, ReBAR, FPS cap policy, and profile review entry.</p>
+            <a class="module-link" href="#games">Profile scope</a>
+          </article>
+          <article>
+            <span class="module-tag module-tag--power">Power</span>
+            <h3>Power plan</h3>
+            <p>Balanced, performance, AC profile, thermal caveats, and rollback-capable adjustments.</p>
+            <a class="module-link" href="#one-click">Review path</a>
+          </article>
+          <article>
+            <span class="module-tag module-tag--startup">Startup/services</span>
+            <h3>Background load</h3>
+            <p>Startup impact, service risk, review-gated items, and clear blocked states.</p>
+            <a class="module-link" href="#proof">Impact proof</a>
+          </article>
+          <article>
+            <span class="module-tag module-tag--benchmark">Benchmark</span>
+            <h3>Measured deltas</h3>
+            <p>Average FPS, 1% lows, frametime, session metadata, and example labels.</p>
+            <a class="module-link" href="#proof">Benchmark card</a>
+          </article>
+          <article>
+            <span class="module-tag module-tag--rollback">Rollback</span>
+            <h3>Restore trail</h3>
+            <p>Restore points, app snapshots, audit export, reboot notes, and revert entry points.</p>
+            <a class="module-link" href="#trust">Trust surface</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="section section--games" id="games" aria-labelledby="games-title">
+        <div class="section__heading">
+          <p class="eyebrow">Supported games</p>
+          <h2 id="games-title">PUBG is the first visible profile, with support labels kept honest.</h2>
+        </div>
+        <div class="game-layout">
+          <div class="game-board" aria-label="Game support cards">
+            <article>
+              <span class="status-pill status-pill--warning">Preview profile</span>
+              <h3>PUBG: Battlegrounds</h3>
+              <p>Install detection, TslGame.exe path, BattlEye boundary, DX mode comparison, and NVIDIA profile links.</p>
+            </article>
+            <article>
+              <span class="status-pill status-pill--success">Detected context</span>
+              <h3>NVIDIA 551.86 branch</h3>
+              <p>Driver and display policy are shown as context for profile recommendations, not as a forced update.</p>
+            </article>
+            <article>
+              <span class="status-pill status-pill--muted">Empty state ready</span>
+              <h3>Game not found</h3>
+              <p>Unsupported or missing installs show detection guidance instead of a misleading optimize action.</p>
+            </article>
+            <article>
+              <span class="status-pill status-pill--muted">Planned expansion</span>
+              <h3>More profiles later</h3>
+              <p>Future games will use the same detection, benchmark, rollback, and source-label pattern.</p>
+            </article>
+          </div>
+          <aside class="game-summary" aria-label="PUBG optimization boundary">
+            <span class="panel-kicker">Anti-cheat boundary</span>
+            <h3>Competitive planning without shortcuts.</h3>
+            <p>
+              Game-facing work avoids memory edits, kernel patches, test-signing changes, and unsupported benchmark
+              claims. The visible promise is readiness, not a magic FPS guarantee.
+            </p>
+            <a class="button button--secondary" href="#proof">See proof labels</a>
+          </aside>
+        </div>
       </section>
 
       <section class="section section--proof" id="proof" aria-labelledby="proof-title">
         <div class="section__heading">
           <p class="eyebrow">Benchmark proof</p>
-          <h2 id="proof-title">Claims stay tied to measurement.</h2>
+          <h2 id="proof-title">Performance proof is labeled as example data until real capture ships.</h2>
         </div>
         <div class="proof-grid">
-          <article class="proof-panel proof-panel--wide">
-            <div class="chart-card" aria-label="Before and after benchmark chart">
+          <article class="benchmark-panel">
+            <span class="status-pill status-pill--warning">Example benchmark</span>
+            <h3>Before and after run card</h3>
+            <div class="chart-card" aria-label="Example before and after benchmark chart">
               <div class="chart-card__row">
                 <span>Average FPS</span>
                 <strong>147 -> 156</strong>
@@ -123,122 +234,114 @@
               </div>
               <div class="chart-card__row">
                 <span>p95 frametime</span>
-                <strong>11.8ms -> 10.6ms</strong>
+                <strong>11.8 ms -> 10.6 ms</strong>
                 <i style="--bar: 68%"></i>
               </div>
             </div>
             <p>
-              Example deltas are intentionally cautious and tied to a before/after methodology. Final values depend on
-              hardware, drivers, Windows state, thermals, and game settings.
+              Demo context: Windows desktop preview, NVIDIA driver branch shown in-app, PUBG profile planning. These
+              values are placeholders and are not a verified public performance claim.
             </p>
           </article>
-          <article class="proof-panel">
+          <article>
             <span class="panel-kicker">Method</span>
-            <h3>Repeatable runs</h3>
-            <p>Capture session, apply selected plan, reboot when required, recapture, then compare lows and variance.</p>
+            <h3>Repeatable sessions</h3>
+            <p>Capture, apply selected plan, reboot when required, recapture, then compare lows and variance.</p>
           </article>
-          <article class="proof-panel">
-            <span class="panel-kicker">Confidence</span>
+          <article>
+            <span class="panel-kicker">Claim guard</span>
             <h3>No universal boosts</h3>
-            <p>Results are marked as guidance until enough repeat samples remove noise from thermal and match variance.</p>
+            <p>Numeric deltas stay hidden or labeled until hardware, drivers, Windows state, thermals, and settings are known.</p>
           </article>
-        </div>
-      </section>
-
-      <section class="section section--split" id="pc-wide" aria-labelledby="pc-wide-title">
-        <div class="section__heading">
-          <p class="eyebrow">PC-wide optimization</p>
-          <h2 id="pc-wide-title">One plan across Windows, power, GPU, storage, and network state.</h2>
-        </div>
-        <div class="capability-grid">
-          <article>
-            <span>01</span>
-            <h3>Read-only scan</h3>
-            <p>Hardware, OS, services, startup, power plan, GPU driver, storage, and network readiness.</p>
-          </article>
-          <article>
-            <span>02</span>
-            <h3>Mode policy</h3>
-            <p>Safe, Competitive, and Lab recommendations stay separated so risk never hides inside a single button.</p>
-          </article>
-          <article>
-            <span>03</span>
-            <h3>Rollback trail</h3>
-            <p>Every write-ready change is paired with a snapshot, audit event, verification step, and restore path.</p>
-          </article>
-          <article>
-            <span>04</span>
-            <h3>Signed delivery</h3>
-            <p>Catalog, update, and trust surfaces reserve space for signed releases and explicit consent.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="section section--game" id="pubg" aria-labelledby="pubg-title">
-        <div class="game-layout">
-          <div class="section__heading">
-            <p class="eyebrow">PUBG focus</p>
-            <h2 id="pubg-title">Competitive planning without anti-cheat shortcuts.</h2>
-          </div>
-          <div class="game-board" aria-label="PUBG optimization focus areas">
-            <div>
-              <strong>TslGame.exe</strong>
-              <span>Install and profile detection</span>
-            </div>
-            <div>
-              <strong>DX mode benchmark</strong>
-              <span>DX11 versus DX11 Enhanced comparison</span>
-            </div>
-            <div>
-              <strong>BattlEye-safe</strong>
-              <span>No game memory, kernel, or test-signing tweaks</span>
-            </div>
-            <div>
-              <strong>NVIDIA profile</strong>
-              <span>Reflex, FPS cap, VRR, and ReBAR policy</span>
-            </div>
-          </div>
         </div>
       </section>
 
       <section class="section section--trust" id="trust" aria-labelledby="trust-title">
         <div class="trust-copy">
-          <p class="eyebrow">Signed by Liiiraa</p>
-          <h2 id="trust-title">Trust surfaces are part of the product, not a footer afterthought.</h2>
+          <p class="eyebrow">Trust and rollback</p>
+          <h2 id="trust-title">Safety details are product surfaces, not footer fine print.</h2>
           <p>
-            The landing page reserves public-facing space for release signing, update channels, rollback state, privacy
-            consent, and future account or purchase flows.
+            Public copy stays aligned with the app: signed release channel, backup-first apply, rollback snapshots,
+            audit export, privacy consent, and no hidden privileged writes.
           </p>
+          <div class="trust-badges" aria-label="Trust signals">
+            <span>Signed stable channel</span>
+            <span>Rollback snapshots</span>
+            <span>No unsafe defaults</span>
+            <span>Telemetry consent reserved</span>
+          </div>
           <a class="button button--secondary" href="./waitlist/">Reserve access</a>
         </div>
         <img
           class="trust-preview"
           src="./public/social-preview.png"
-          alt="Liiiraa Booster social preview with logo, app visual, and Signed by Liiiraa text"
+          alt="Liiiraa Booster social preview with logo, product visual, and Signed by Liiiraa text"
           width="1200"
           height="630"
         />
       </section>
 
-      <section class="section section--pricing" aria-labelledby="pricing-title">
+      <section class="section section--quotes" aria-labelledby="quotes-title">
         <div class="section__heading">
-          <p class="eyebrow">Future access</p>
-          <h2 id="pricing-title">Auth, pricing, affiliate, and purchase flows are reserved.</h2>
+          <p class="eyebrow">Preview quotes</p>
+          <h2 id="quotes-title">Feedback is labeled before launch.</h2>
         </div>
-        <div class="reserved-grid">
-          <article>
-            <h3>Waitlist route</h3>
-            <p>Calls to action point to a placeholder path until account and billing work lands.</p>
-            <a href="./waitlist/">Open placeholder</a>
-          </article>
-          <article>
-            <h3>Pricing placeholder</h3>
-            <p>Plan names, checkout, discounts, and affiliate attribution are intentionally not implemented here.</p>
-          </article>
-          <article>
-            <h3>Contact-ready</h3>
-            <p>Lead capture can be connected later without changing the product-first landing structure.</p>
-          </article>
+        <div class="quote-grid">
+          <figure>
+            <blockquote>
+              "The important part is that safe, game, benchmark, and rollback work no longer compete for attention."
+            </blockquote>
+            <figcaption>Preview quote from internal design review</figcaption>
+          </figure>
+          <figure>
+            <blockquote>
+              "The landing page should show the product first, then prove what each optimization lane is allowed to do."
+            </blockquote>
+            <figcaption>Preview quote from polish checklist</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section section--faq" id="faq" aria-labelledby="faq-title">
+        <div class="section__heading">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="faq-title">Clear answers before download is available.</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>Can I download Liiiraa Booster today?</summary>
+            <p>The public Windows download is pending. The waitlist route is the current access path.</p>
+          </details>
+          <details>
+            <summary>Are the benchmark numbers verified user results?</summary>
+            <p>No. Benchmark values on this page are labeled example data until repeatable public capture is shipped.</p>
+          </details>
+          <details>
+            <summary>Does Game Mode change PUBG or anti-cheat internals?</summary>
+            <p>No. The planned profile avoids game memory, kernel, test-signing, and anti-cheat bypass changes.</p>
+          </details>
+          <details>
+            <summary>What happens before optimization writes anything?</summary>
+            <p>The product first scans, shows backup and rollback context, separates risk lanes, and asks for review when needed.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="section section--final" id="download" aria-labelledby="final-title">
+        <div class="final-panel">
+          <div>
+            <p class="eyebrow">Access</p>
+            <h2 id="final-title">Join the waitlist for the first rollback-backed Windows preview.</h2>
+            <p>
+              Download, Discord/community, and checkout surfaces stay clearly reserved until those flows exist.
+            </p>
+          </div>
+          <div class="final-actions" aria-label="Final conversion actions">
+            <a class="button button--primary" href="./waitlist/">Join waitlist</a>
+            <a class="button button--secondary" href="#modules">Review details</a>
+            <span class="button button--locked" role="link" aria-disabled="true">Windows download pending</span>
+            <span class="button button--ghost" role="link" aria-disabled="true">Discord preview pending</span>
+          </div>
         </div>
       </section>
     </main>

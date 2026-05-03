@@ -10,6 +10,8 @@
     "check:js": "turbo run check",
     "check:rust": "cargo check --workspace --all-targets",
     "commitlint": "commitlint",
+    "desktop:build": "pnpm --filter @liiiraa/desktop tauri:build",
+    "desktop:dev": "pnpm --filter @liiiraa/desktop tauri:dev",
     "dev": "turbo run dev",
     "format": "turbo run format",
     "lint": "turbo run lint",

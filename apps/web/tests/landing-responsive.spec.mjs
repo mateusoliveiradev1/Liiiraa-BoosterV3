@@ -18,20 +18,25 @@ for (const viewport of [
     await page.goto(landingUrl);
 
     await expect(page.getByRole("heading", { level: 1, name: "Liiiraa Booster" })).toBeVisible();
-    await expect(page.locator(".app-visual")).toBeVisible();
+    await expect(page.locator(".product-preview")).toBeVisible();
+    await expect(page.getByAltText(/Liiiraa Booster dashboard/)).toBeVisible();
+    const heroStats = page.locator(".hero__stats");
     if (viewport.name === "desktop") {
-      await expect(page.getByText("Backup first")).toBeVisible();
-      await expect(page.getByText("Benchmarked")).toBeVisible();
-      await expect(page.getByText("PUBG ready")).toBeVisible();
+      await expect(heroStats.getByText("Rollback first", { exact: true })).toBeVisible();
+      await expect(heroStats.getByText("Example data", { exact: true })).toBeVisible();
+      await expect(heroStats.getByText("PUBG preview", { exact: true })).toBeVisible();
     } else {
-      await expect(page.getByText("Backup first")).toBeHidden();
-      await expect(page.getByText("Benchmarked")).toBeHidden();
-      await expect(page.getByText("PUBG ready")).toBeHidden();
+      await expect(heroStats.getByText("Rollback first", { exact: true })).toBeHidden();
+      await expect(heroStats.getByText("Example data", { exact: true })).toBeHidden();
+      await expect(heroStats.getByText("PUBG preview", { exact: true })).toBeHidden();
     }
-    await expect(page.getByRole("heading", { name: "Claims stay tied to measurement." })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Competitive planning without anti-cheat shortcuts." })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Trust surfaces are part of the product, not a footer afterthought." })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Join waitlist" })).toHaveAttribute("href", "./waitlist/");
+    await expect(page.getByRole("heading", { name: "Separated lanes replace the old dense feature grid." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "PUBG is the first visible profile, with support labels kept honest." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Performance proof is labeled as example data until real capture ships." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Safety details are product surfaces, not footer fine print." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Clear answers before download is available." })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Join waitlist" }).first()).toHaveAttribute("href", "./waitlist/");
+    await expect(page.getByText("Windows download pending")).toBeVisible();
 
     await expectNoHorizontalOverflow(page);
     await expectNoVisibleTextClipping(page);
@@ -45,6 +50,8 @@ test("waitlist placeholder is a real reserved route instead of fake checkout", a
   await expect(page.getByRole("heading", { level: 1, name: "Waitlist placeholder" })).toBeVisible();
   await expect(page.getByText("checkout, and account flows are intentionally reserved")).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to landing" })).toHaveAttribute("href", "../");
+  await expect(page.getByLabel("Email for launch notice")).toBeVisible();
+  await expect(page.getByText("Download pending")).toBeVisible();
 
   await expectNoHorizontalOverflow(page);
   await expectNoVisibleTextClipping(page);

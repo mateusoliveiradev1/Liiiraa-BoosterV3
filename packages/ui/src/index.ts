@@ -1,5 +1,20 @@
 export { liiiraaTokens } from "./tokens";
 export {
+  assertNoMissingOptimizerLocaleKeys,
+  clearMissingOptimizerLocaleKeys,
+  createOptimizerTranslator,
+  defaultOptimizerLocale,
+  getMissingOptimizerLocaleKeys,
+  isOptimizerLocale,
+  normalizeOptimizerLocale,
+  optimizerGlossaryKeys,
+  optimizerLocaleCatalogs,
+  optimizerLocaleFallbackOrder,
+  supportedOptimizerLocales,
+  tOptimizer,
+  translateOptimizerCopy
+} from "./localization";
+export {
   assertOptimizationWorkflowSmoke,
   optimizationModeOptions,
   optimizationWorkflow,
@@ -12,22 +27,36 @@ export {
 } from "./settingsTrust.js";
 export {
   assertPrimitiveA11ySmoke,
+  createBenchmarkDeltaPrimitive,
   createButtonPrimitive,
+  createCardPrimitive,
+  createCategoryLanePrimitive,
+  createDefaultModeOptions,
+  createDrawerPrimitive,
   createIconButtonPrimitive,
   createMetricTilePrimitive,
   createModeSegmentedControlPrimitive,
+  createProofTilePrimitive,
   createPrimitiveStoryFixtures,
   createRiskBadgePrimitive,
+  createStateBadgePrimitive,
   createStatusStripPrimitive,
+  createTabListPrimitive,
   createToolbarPrimitive,
+  createTogglePrimitive,
   createTooltipPrimitive,
+  createTrustBadgePrimitive,
   defaultModeOptions,
   renderPrimitiveStoryHtml,
   runPrimitiveA11ySmoke
 } from "./primitives";
 export type {
+  BenchmarkDeltaPrimitiveOptions,
   ButtonPrimitiveOptions,
   ButtonVariant,
+  CardPrimitiveOptions,
+  CategoryLanePrimitiveOptions,
+  DrawerPrimitiveOptions,
   IconButtonPrimitiveOptions,
   InteractivePrimitiveState,
   MetricTilePrimitiveOptions,
@@ -45,12 +74,18 @@ export type {
   PrimitivePart,
   PrimitiveSize,
   PrimitiveTone,
+  ProofTilePrimitiveOptions,
   RiskBadgePrimitiveOptions,
   RiskLevel,
+  StateBadgePrimitiveOptions,
   StatusStripItem,
   StatusStripPrimitiveOptions,
+  TabListPrimitiveOptions,
+  TabPrimitiveOption,
+  TogglePrimitiveOptions,
   ToolbarPrimitiveOptions,
-  TooltipPrimitive
+  TooltipPrimitive,
+  TrustBadgePrimitiveOptions
 } from "./primitives";
 export type {
   SettingsTrustActionVariant,
@@ -64,6 +99,15 @@ export type {
   SettingsTrustToggle,
   SettingsTrustTone
 } from "./settingsTrust.js";
+export type {
+  MissingOptimizerLocaleKeySignal,
+  OptimizerLocale,
+  OptimizerLocaleCatalog,
+  OptimizerLocaleKey,
+  OptimizerTranslateOptions,
+  PartialOptimizerLocaleCatalog,
+  TranslationParams
+} from "./localization";
 export type {
   LiiiraaColorTokenGroup,
   LiiiraaComponentTokenGroup,

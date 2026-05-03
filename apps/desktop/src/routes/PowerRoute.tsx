@@ -1,6 +1,6 @@
-import { optimizationWorkflow } from "../../../../packages/ui/src/optimizationWorkflow.js";
+import { desktopCommandCenterState } from "../adapters/desktopState";
 import { PowerWorkflowView } from "../components/OptimizationWorkflow";
 
 export function PowerRoute() {
-  return <PowerWorkflowView data={optimizationWorkflow.gaming.power} />;
+  return <PowerWorkflowView data={desktopCommandCenterState.routes.power} />;
 }

@@ -6,6 +6,10 @@
   "platforms": ["windows"],
   "local": true,
   "permissions": [
+    "core:window:allow-close",
+    "core:window:allow-minimize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-toggle-maximize",
     "allow-get-ipc-security-status",
     "allow-get-updater-configuration",
     "allow-check-signed-update",

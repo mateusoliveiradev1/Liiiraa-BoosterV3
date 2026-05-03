@@ -1,19 +1,25 @@
-import { optimizationWorkflow } from "../../../../packages/ui/src/optimizationWorkflow.js";
+import { tOptimizer } from "../../../../packages/ui/src/localization";
+import { desktopCommandCenterState } from "../adapters/desktopState";
 import { PlanActionBar, ScanWorkflowView } from "../components/OptimizationWorkflow";
 
 const scanActions = [
   {
     id: "start-scan",
-    label: "Start scan",
+    label: tOptimizer("actions.startScan"),
     variant: "primary" as const
   },
   {
     id: "cancel-scan",
-    label: "Cancel scan",
+    label: tOptimizer("actions.cancelScan"),
     variant: "ghost" as const
   }
 ];
 
 export function ScanRoute() {
-  return <ScanWorkflowView actions={<PlanActionBar actions={scanActions} />} data={optimizationWorkflow.scan} />;
+  return (
+    <ScanWorkflowView
+      actions={<PlanActionBar actions={scanActions} />}
+      data={desktopCommandCenterState.routes.scan}
+    />
+  );
 }

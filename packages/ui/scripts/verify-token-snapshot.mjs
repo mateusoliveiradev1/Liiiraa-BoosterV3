@@ -24,6 +24,7 @@ const requiredPaths = [
   "meta.signature",
   "colors.background.app",
   "colors.surface.panel",
+  "colors.surface.premium",
   "colors.border.focus",
   "colors.text.primary",
   "colors.text.secondary",
@@ -31,6 +32,10 @@ const requiredPaths = [
   "colors.accent.performance",
   "colors.status.warning",
   "colors.status.danger",
+  "colors.status.trust",
+  "colors.status.rollback",
+  "colors.status.benchmark",
+  "colors.status.locked",
   "colors.risk.low",
   "colors.risk.medium",
   "colors.risk.high",
@@ -42,6 +47,16 @@ const requiredPaths = [
   "typography.fontFamily.ui",
   "typography.fontFamily.metric",
   "typography.letterSpacing.default",
+  "shadow.premium",
+  "motion.duration.fast",
+  "components.button.height.md",
+  "components.buttonVariant.primary.surface",
+  "components.buttonVariant.destructive.surface",
+  "components.categoryLane.minHeight",
+  "components.proofTile.minHeight",
+  "components.stateBadge.minHeight",
+  "components.benchmarkDelta.trackHeight",
+  "components.drawer.maxWidth",
   "components.statusStrip.height",
   "components.actionBar.height"
 ];
@@ -57,19 +72,25 @@ const snapshotShape = {
   colors: {
     background: tokens.colors.background,
     surface: tokens.colors.surface,
+    border: tokens.colors.border,
     text: tokens.colors.text,
     accent: tokens.colors.accent,
     status: tokens.colors.status,
     risk: tokens.colors.risk,
-    mode: tokens.colors.mode
+    mode: tokens.colors.mode,
+    chart: tokens.colors.chart
   },
   typography: {
     fontFamily: tokens.typography.fontFamily,
     fontSize: tokens.typography.fontSize,
     lineHeight: tokens.typography.lineHeight,
+    fontWeight: tokens.typography.fontWeight,
     letterSpacing: tokens.typography.letterSpacing
   },
   radius: tokens.radius,
+  borderWidth: tokens.borderWidth,
+  shadow: tokens.shadow,
+  motion: tokens.motion,
   components: tokens.components
 };
 
@@ -86,12 +107,19 @@ if (!themeCss.includes("@theme")) {
 const requiredCss = [
   "--color-liiiraa-bg-app: #0b0f14;",
   "--color-liiiraa-surface-panel: #151d26;",
+  "--color-liiiraa-surface-premium: #18212c;",
   "--color-liiiraa-text-primary: #f5f8fb;",
   "--color-liiiraa-telemetry: #27d7ff;",
   "--color-liiiraa-performance: #3af28f;",
   "--color-liiiraa-warning: #ffbd5a;",
   "--color-liiiraa-danger: #ff5a67;",
-  "--radius-liiiraa-card: 0.5rem;"
+  "--color-liiiraa-trust: #42e6b4;",
+  "--color-liiiraa-rollback: #d7b86a;",
+  "--color-liiiraa-benchmark: #62c7d8;",
+  "--radius-liiiraa-card: 0.5rem;",
+  "--liiiraa-action-height-md: 2.45rem;",
+  "--liiiraa-category-lane-min-height: 7.5rem;",
+  "--liiiraa-proof-tile-min-height: 6.5rem;"
 ];
 
 for (const cssToken of requiredCss) {
@@ -140,7 +168,11 @@ const contrastPairs = [
   ["text.secondary", tokens.colors.text.secondary, tokens.colors.surface.panel],
   ["status.success", tokens.colors.status.success, tokens.colors.background.app],
   ["status.warning", tokens.colors.status.warning, tokens.colors.background.app],
-  ["status.danger", tokens.colors.status.danger, tokens.colors.background.app]
+  ["status.danger", tokens.colors.status.danger, tokens.colors.background.app],
+  ["status.trust", tokens.colors.status.trust, tokens.colors.background.app],
+  ["status.rollback", tokens.colors.status.rollback, tokens.colors.background.app],
+  ["status.benchmark", tokens.colors.status.benchmark, tokens.colors.background.app],
+  ["status.locked", tokens.colors.status.locked, tokens.colors.background.app]
 ];
 
 for (const [name, foreground, background] of contrastPairs) {

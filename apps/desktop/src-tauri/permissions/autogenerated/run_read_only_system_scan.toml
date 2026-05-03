@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-run-read-only-system-scan"
+description = "Enables the run_read_only_system_scan command without any pre-configured scope."
+commands.allow = ["run_read_only_system_scan"]
+
+[[permission]]
+identifier = "deny-run-read-only-system-scan"
+description = "Denies the run_read_only_system_scan command without any pre-configured scope."
+commands.deny = ["run_read_only_system_scan"]

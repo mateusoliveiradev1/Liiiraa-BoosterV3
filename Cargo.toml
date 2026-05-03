@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "apps/desktop/src-tauri",
     "crates/amd",
     "crates/benchmark",
     "crates/cpu",

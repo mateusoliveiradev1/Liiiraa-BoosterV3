@@ -1,6 +1,6 @@
-import { optimizationWorkflow } from "../../../../packages/ui/src/optimizationWorkflow.js";
+import { desktopCommandCenterState } from "../adapters/desktopState";
 import { NvidiaWorkflowView } from "../components/OptimizationWorkflow";
 
 export function NvidiaRoute() {
-  return <NvidiaWorkflowView data={optimizationWorkflow.gaming.nvidia} />;
+  return <NvidiaWorkflowView data={desktopCommandCenterState.routes.nvidia} />;
 }

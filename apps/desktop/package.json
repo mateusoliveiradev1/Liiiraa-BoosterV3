@@ -1,0 +1,37 @@
+{
+  "name": "@liiiraa/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "pnpm typecheck && pnpm check:visual-tokens",
+    "check:visual-tokens": "node scripts/check-css-token-usage.mjs",
+    "dev": "vite",
+    "lint": "pnpm typecheck && pnpm check:visual-tokens",
+    "preview": "vite preview",
+    "tauri:build": "tauri build",
+    "tauri:dev": "tauri dev",
+    "test": "playwright test -c tests/playwright.config.mjs",
+    "test:visual": "playwright test -c tests/playwright.config.mjs desktop-command-center.spec.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@liiiraa/catalog": "workspace:*",
+    "@liiiraa/telemetry": "workspace:*",
+    "@liiiraa/ui": "workspace:*",
+    "@tauri-apps/api": "^2.11.0",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@tauri-apps/cli": "^2.11.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}

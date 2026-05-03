@@ -1,11 +1,13 @@
-import { optimizationWorkflow } from "../../../../packages/ui/src/optimizationWorkflow.js";
-import { DashboardWorkflowView, PlanActionBar } from "../components/OptimizationWorkflow";
+import { desktopCommandCenterState } from "../adapters/desktopState";
+import { DashboardWorkflowView } from "../components/OptimizationWorkflow";
 
 export function DashboardRoute() {
   return (
     <DashboardWorkflowView
-      actions={<PlanActionBar actions={optimizationWorkflow.optimize.actions.slice(0, 2)} />}
-      data={optimizationWorkflow.dashboard}
+      data={desktopCommandCenterState.routes.dashboard}
+      optimizeData={desktopCommandCenterState.routes.optimize}
+      rollbackData={desktopCommandCenterState.routes.rollback}
+      scanData={desktopCommandCenterState.routes.scan}
     />
   );
 }
