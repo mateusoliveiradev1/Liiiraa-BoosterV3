@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing signed release tag to inspect or publish.
+        required: true
+        type: string
+      dry_run:
+        description: Validate release checks without publishing.
+        required: true
+        default: true
+        type: boolean
+
+permissions: read-all
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      dry_run: ${{ steps.resolve.outputs.dry_run }}
+
+    steps:
+      - name: Checkout repository
+        # Release workflows keep third-party actions pinned to reviewed full-length SHAs.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+
+      - name: Resolve release tag
+        id: resolve
+        shell: bash
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+            dry_run="false"
+          else
+            release_tag="${DISPATCH_TAG}"
+            dry_run="${DISPATCH_DRY_RUN}"
+          fi
+
+          if [[ -z "${release_tag}" ]]; then
+            echo "::error::A release tag is required."
+            exit 1
+          fi
+
+          if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "::error::Release tag must look like v1.2.3 or v1.2.3-rc.1."
+            exit 1
+          fi
+
+          case "${dry_run}" in
+            true|false) ;;
+            *)
+              echo "::error::dry_run must resolve to true or false."
+              exit 1
+              ;;
+          esac
+
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "dry_run=${dry_run}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify signed tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.resolve.outputs.release_tag }}
+          DRY_RUN: ${{ steps.resolve.outputs.dry_run }}
+        run: |
+          git fetch --force --tags origin
+
+          if git show-ref --verify --quiet "refs/tags/${RELEASE_TAG}"; then
+            if [[ "${DRY_RUN}" == "true" ]]; then
+              git verify-tag "${RELEASE_TAG}" || echo "::warning::Dry run found an unsigned or locally unverifiable tag; publishing still requires a signed tag."
+            else
+              git verify-tag "${RELEASE_TAG}"
+            fi
+
+            git checkout --detach "${RELEASE_TAG}"
+          elif [[ "${DRY_RUN}" == "true" ]]; then
+            echo "::notice::Dry run is using ${GITHUB_SHA} because ${RELEASE_TAG} does not exist yet."
+          else
+            echo "::error::Release tag ${RELEASE_TAG} does not exist."
+            exit 1
+          fi
+
+      - name: Check release tree for secrets
+        run: node scripts/check-release-no-secrets.mjs
+
+      - name: Generate changelog
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.resolve.outputs.release_tag }}
+          DRY_RUN: ${{ steps.resolve.outputs.dry_run }}
+        run: |
+          args=(--tag "${RELEASE_TAG}" --output "${RUNNER_TEMP}/RELEASE_CHANGELOG.md")
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            args+=(--allow-missing-tag)
+          fi
+
+          node scripts/generate-release-changelog.mjs "${args[@]}"
+
+      - name: Prepare release metadata
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.resolve.outputs.release_tag }}
+          DRY_RUN: ${{ steps.resolve.outputs.dry_run }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/release-metadata"
+          cp "${RUNNER_TEMP}/RELEASE_CHANGELOG.md" "${RUNNER_TEMP}/release-metadata/CHANGELOG.md"
+
+          cat > "${RUNNER_TEMP}/release-metadata/manifest.json" <<EOF
+          {
+            "tag": "${RELEASE_TAG}",
+            "commit": "$(git rev-parse HEAD)",
+            "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "dryRun": ${DRY_RUN},
+            "workflow": "${GITHUB_WORKFLOW}",
+            "runId": "${GITHUB_RUN_ID}"
+          }
+          EOF
+
+      - name: Upload release metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-metadata
+          path: ${{ runner.temp }}/release-metadata
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release:
+    name: Publish release
+    needs: prepare-release
+    if: needs.prepare-release.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare-release.outputs.release_tag }}
+
+      - name: Download release metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-metadata
+          path: release-metadata
+
+      - name: Attest release metadata
+        # Add installer and updater artifacts to the subject path once the Tauri build job exists.
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+        with:
+          subject-path: release-metadata/manifest.json
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
+        run: |
+          if gh release view "${RELEASE_TAG}" > /dev/null 2>&1; then
+            echo "::error::Release ${RELEASE_TAG} already exists."
+            exit 1
+          fi
+
+          gh release create "${RELEASE_TAG}" \
+            --verify-tag \
+            --title "Liiiraa Booster ${RELEASE_TAG}" \
+            --notes-file release-metadata/CHANGELOG.md \
+            release-metadata/manifest.json
