@@ -39,6 +39,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set up Rust
+        run: |
+          rustup toolchain install 1.80.0 --profile minimal --no-self-update
+          rustup default 1.80.0
+
       - name: Validate commit message range
         shell: bash
         run: |
@@ -49,6 +54,12 @@ jobs:
           fi
 
           pnpm commitlint --from "$from" --to HEAD --verbose
+
+      - name: Run full quality command
+        run: pnpm check
+
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
 
       - name: Verify workflow permissions are explicit
         run: grep -R "permissions:" .github/workflows

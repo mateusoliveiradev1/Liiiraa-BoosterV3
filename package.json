@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "turbo run build",
-    "check": "turbo run check",
+    "check": "pnpm check:js && pnpm check:rust",
+    "check:js": "turbo run check",
+    "check:rust": "cargo check --workspace --all-targets",
     "commitlint": "commitlint",
     "dev": "turbo run dev",
     "format": "turbo run format",
