@@ -10,9 +10,7 @@ use optimizer_core::{
         CleanupPreview, DirectStorageInspection, NtfsEightDotThreeNameState, NtfsLastAccessState,
         NtfsMetadataCompatibility, NtfsMetadataPlanRequest, StorageControlConsent,
         StorageReadinessPlanRequest, StorageSenseInspection, StorageSenseState, TrimInspection,
-        TrimState, STORAGE_NTFS_8DOT3_TWEAK_ID, STORAGE_NTFS_LAST_ACCESS_TWEAK_ID,
-        STORAGE_SENSE_CONFIGURE_TWEAK_ID, TARGET_NTFS_DISABLE_8DOT3,
-        TARGET_NTFS_DISABLE_LAST_ACCESS,
+        TrimState, STORAGE_SENSE_CONFIGURE_TWEAK_ID,
     },
     tweak_contracts::{PlanAction, TweakOperationKind, TweakPlan},
 };
@@ -126,7 +124,11 @@ pub fn apply_storage_sense_plan_to_fixture(
 ) -> Result<StorageSenseRegistrySummary, StorageSenseRegistryError> {
     let mut summary = StorageSenseRegistrySummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -154,7 +156,11 @@ pub fn verify_storage_sense_plan_fixture(
 ) -> Result<StorageSenseRegistrySummary, StorageSenseRegistryError> {
     let mut summary = StorageSenseRegistrySummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -190,7 +196,11 @@ pub fn apply_ntfs_metadata_plan_to_fixture(
 
     let mut summary = NtfsMetadataSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_ntfs_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -220,7 +230,11 @@ pub fn verify_ntfs_metadata_plan_fixture(
 
     let mut summary = NtfsMetadataSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_ntfs_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -257,7 +271,11 @@ fn cleanup_candidate_from_scan(item: &StorageCleanupCandidateScanItem) -> Cleanu
             item.file_count,
         )
     } else {
-        CleanupCandidate::excluded(item.target.clone(), item.path.clone(), cleanup_kind(&item.kind))
+        CleanupCandidate::excluded(
+            item.target.clone(),
+            item.path.clone(),
+            cleanup_kind(&item.kind),
+        )
     }
 }
 
@@ -584,7 +602,12 @@ impl StorageSenseRegistryError {
 
 impl fmt::Display for StorageSenseRegistryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}: {}", self.reason.as_str(), self.reason.message())?;
+        write!(
+            formatter,
+            "{}: {}",
+            self.reason.as_str(),
+            self.reason.message()
+        )?;
 
         if let Some(tweak_id) = self.tweak_id() {
             write!(formatter, " ({tweak_id})")?;
@@ -737,7 +760,12 @@ impl NtfsMetadataSettingsError {
 
 impl fmt::Display for NtfsMetadataSettingsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}: {}", self.reason.as_str(), self.reason.message())?;
+        write!(
+            formatter,
+            "{}: {}",
+            self.reason.as_str(),
+            self.reason.message()
+        )?;
 
         if let Some(tweak_id) = self.tweak_id() {
             write!(formatter, " ({tweak_id})")?;
@@ -760,7 +788,9 @@ mod tests {
         backup::{capture_plan_backups, execute_rollback, RollbackRequest},
         storage::{
             storage_plan_has_no_blind_deletes, STORAGE_DIRECTSTORAGE_CHECK_TWEAK_ID,
-            STORAGE_TEMP_CLEANUP_TWEAK_ID, TARGET_STORAGE_SENSE_CADENCE,
+            STORAGE_NTFS_8DOT3_TWEAK_ID, STORAGE_NTFS_LAST_ACCESS_TWEAK_ID,
+            STORAGE_TEMP_CLEANUP_TWEAK_ID, TARGET_NTFS_DISABLE_8DOT3,
+            TARGET_NTFS_DISABLE_LAST_ACCESS, TARGET_STORAGE_SENSE_CADENCE,
             TARGET_STORAGE_SENSE_ENABLED, TARGET_STORAGE_SENSE_RECYCLE_BIN_DAYS,
         },
         tweak_contracts::{PlanAction, RollbackStatus},
@@ -800,8 +830,7 @@ mod tests {
             .with_value(TARGET_STORAGE_SENSE_CADENCE, "7")
             .with_value(TARGET_STORAGE_SENSE_RECYCLE_BIN_DAYS, "14");
 
-        let backups =
-            capture_plan_backups(&plan, &mut fixture).expect("backup should be captured");
+        let backups = capture_plan_backups(&plan, &mut fixture).expect("backup should be captured");
         assert_eq!(backups.len(), 1);
 
         let applied = apply_storage_sense_plan_to_fixture(&mut fixture, &plan)
@@ -809,8 +838,7 @@ mod tests {
         assert_eq!(applied.item_count, 1);
         assert_eq!(fixture.value(TARGET_STORAGE_SENSE_ENABLED), Some("1"));
         assert_eq!(fixture.value(TARGET_STORAGE_SENSE_CADENCE), Some("30"));
-        verify_storage_sense_plan_fixture(&fixture, &plan)
-            .expect("fixture readback should verify");
+        verify_storage_sense_plan_fixture(&fixture, &plan).expect("fixture readback should verify");
 
         let item = item(&plan, STORAGE_SENSE_CONFIGURE_TWEAK_ID);
         let rollback_request = RollbackRequest::new(
@@ -874,8 +902,7 @@ Based on the above two settings, 8dot3 name creation is enabled on C:
         assert_eq!(fixture.value(TARGET_NTFS_DISABLE_LAST_ACCESS), Some("1"));
         assert_eq!(fixture.value(TARGET_NTFS_DISABLE_8DOT3), Some("1"));
 
-        verify_ntfs_metadata_plan_fixture(&fixture, &plan)
-            .expect("fixture readback should verify");
+        verify_ntfs_metadata_plan_fixture(&fixture, &plan).expect("fixture readback should verify");
 
         for backup in backups {
             let tweak_id = backup.tweak_id.clone();
@@ -891,6 +918,9 @@ Based on the above two settings, 8dot3 name creation is enabled on C:
             fixture.value(TARGET_NTFS_DISABLE_LAST_ACCESS),
             Some("enabled:0")
         );
-        assert_eq!(fixture.value(TARGET_NTFS_DISABLE_8DOT3), Some("enabled_all:0"));
+        assert_eq!(
+            fixture.value(TARGET_NTFS_DISABLE_8DOT3),
+            Some("enabled_all:0")
+        );
     }
 }

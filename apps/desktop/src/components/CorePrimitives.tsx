@@ -585,16 +585,21 @@ export function BenchmarkProofChart({ label, points }: { label: string; points: 
 }
 
 export function ActionButton({ action, className = "" }: { action: CoreAction; className?: string }) {
+  const tooltipId = `${action.id}-tooltip`;
+
   return (
     <button
       className={`button ${className} button--${action.variant ?? "secondary"}`.trim()}
       disabled={action.disabled}
       onClick={() => void runDesktopAction(action)}
-      title={action.tooltip}
       type="button"
+      aria-describedby={tooltipId}
     >
       <IconGlyph name={action.icon} />
       <span>{action.label}</span>
+      <span className="primitive-tooltip" id={tooltipId} role="tooltip">
+        {action.tooltip}
+      </span>
     </button>
   );
 }
@@ -706,6 +711,7 @@ export function actionIconForLabel(label: string): CoreIconName {
   if (/export|folder|data|dados|datos|pasta|carpeta/i.test(label)) return "file";
   if (/gpu|profile|perfil|nvidia/i.test(label)) return "gpu";
   if (/lab|laborat|inspect|inspec/i.test(label)) return "lab";
+  if (/apply|boost|aplicar/i.test(label)) return "zap";
   if (/review|stage|plan|revis|prepar/i.test(label)) return "sliders";
   if (/rollback|restore|restaur|revers/i.test(label)) return "rollback";
   if (/scan|anal/i.test(label)) return "scan";

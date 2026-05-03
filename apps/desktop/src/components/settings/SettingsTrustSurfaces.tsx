@@ -1,6 +1,13 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { Activity, PauseCircle } from "lucide-react";
 import { tOptimizer } from "../../../../../packages/ui/src/localization";
 import { runDesktopAction } from "../../actionRuntime";
+import {
+  getLiveDashboardTelemetryPreference,
+  LIVE_DASHBOARD_TELEMETRY_INTERVAL_MS,
+  setLiveDashboardTelemetryPreference,
+  subscribeLiveDashboardTelemetryPreference
+} from "../../liveDashboardTelemetry";
 import type {
   SettingsTrustActionVariant,
   SettingsTrustChannel,
@@ -84,6 +91,10 @@ export function SettingsTrustSurfaces({
   consentGates?: PrivacyConsentGateSummary[];
   data: SettingsTrustData;
 }) {
+  const [liveTelemetryEnabled, setLiveTelemetryEnabled] = useState(getLiveDashboardTelemetryPreference);
+
+  useEffect(() => subscribeLiveDashboardTelemetryPreference(setLiveTelemetryEnabled), []);
+
   return (
     <div style={viewGridStyle} aria-label="Settings privacy update and trust surfaces">
       <header className="page-header">
@@ -131,6 +142,10 @@ export function SettingsTrustSurfaces({
       <div style={twoColumnStyle}>
         <Surface title="Privacy and telemetry" eyebrow="Consent state">
           <div style={compactRowStyle}>
+            <LiveResourceTelemetryControl
+              enabled={liveTelemetryEnabled}
+              onToggle={() => setLiveDashboardTelemetryPreference(!liveTelemetryEnabled)}
+            />
             {data.privacyControls.map((control) => (
               <ToggleRow key={control.id} item={control} />
             ))}
@@ -268,6 +283,40 @@ function ToggleRow({ item }: { item: SettingsTrustToggle }) {
   );
 }
 
+function LiveResourceTelemetryControl({
+  enabled,
+  onToggle
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = enabled ? Activity : PauseCircle;
+  const tone: SettingsTrustTone = enabled ? "active" : "neutral";
+
+  return (
+    <div style={toggleRowStyle} data-tone={tone}>
+      <input checked={enabled} readOnly type="checkbox" aria-label="Live resource monitor state" />
+      <span>
+        <strong>Live resource monitor</strong>
+        <small className="workflow-muted">
+          {enabled
+            ? `CPU, RAM, disk, and network cards refresh from Windows every ${formatTelemetryInterval()}.`
+            : "CPU, RAM, disk, and network polling is paused to avoid extra hardware work."}
+        </small>
+      </span>
+      <button
+        aria-pressed={enabled}
+        className={enabled ? "button button--secondary" : "button button--ghost"}
+        onClick={onToggle}
+        type="button"
+      >
+        <Icon aria-hidden="true" size={18} strokeWidth={2.2} />
+        <span>{enabled ? "Turn off" : "Turn on"}</span>
+      </button>
+    </div>
+  );
+}
+
 function ChannelRow({ channel }: { channel: SettingsTrustChannel }) {
   return (
     <label style={toggleRowStyle} data-tone={channel.tone}>
@@ -373,6 +422,10 @@ function DefinitionGrid({ items }: { items: Array<[string, string]> }) {
       ))}
     </dl>
   );
+}
+
+function formatTelemetryInterval() {
+  return `${Math.max(1, Math.round(LIVE_DASHBOARD_TELEMETRY_INTERVAL_MS / 1000))}s`;
 }
 
 const toneMarkerStyle: CSSProperties = {

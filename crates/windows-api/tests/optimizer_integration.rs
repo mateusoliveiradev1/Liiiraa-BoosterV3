@@ -1,17 +1,20 @@
+//! Integration coverage for fixture-backed Windows API adapters.
+
+use serde as _;
+use serde_json as _;
+
 use std::collections::BTreeMap;
 
 use optimizer_core::{
-    backup::{capture_plan_backups, execute_rollback, RollbackRequest},
     background_work::{
         BG_SEARCH_INDEXER_PAUSE_SESSION_TWEAK_ID, BG_SYSMAIN_CONDITIONAL_TWEAK_ID,
         TARGET_SEARCH_INDEXER_SESSION_PAUSE, TARGET_SYSMAIN_START_MODE,
     },
-    power_plan::{
-        DevicePowerClass, LiiiraaPowerPlanProfile, PowerPlanConsent, PowerSourceState,
-    },
+    backup::{capture_plan_backups, execute_rollback, RollbackRequest},
+    power_plan::{DevicePowerClass, LiiiraaPowerPlanProfile, PowerPlanConsent, PowerSourceState},
     storage::{
-        TARGET_STORAGE_SENSE_CADENCE, TARGET_STORAGE_SENSE_ENABLED,
-        TARGET_STORAGE_SENSE_RECYCLE_BIN_DAYS, STORAGE_SENSE_CONFIGURE_TWEAK_ID,
+        STORAGE_SENSE_CONFIGURE_TWEAK_ID, TARGET_STORAGE_SENSE_CADENCE,
+        TARGET_STORAGE_SENSE_ENABLED, TARGET_STORAGE_SENSE_RECYCLE_BIN_DAYS,
     },
     tweak_contracts::{PlanAction, RollbackStatus, TweakPlan, TweakPlanItem},
 };
@@ -90,7 +93,10 @@ struct PowerCfgMock {
 impl PowerCfgMock {
     fn new(active_scheme_guid: &str) -> Self {
         let mut schemes = BTreeMap::new();
-        schemes.insert(WINDOWS_BALANCED_SCHEME_GUID.to_owned(), "Balanced".to_owned());
+        schemes.insert(
+            WINDOWS_BALANCED_SCHEME_GUID.to_owned(),
+            "Balanced".to_owned(),
+        );
         schemes.insert(
             WINDOWS_HIGH_PERFORMANCE_SCHEME_GUID.to_owned(),
             "High performance".to_owned(),
@@ -122,14 +128,17 @@ impl PowerCfgMock {
                 String::new()
             }
             ["/changename", scheme, name] => {
-                self.schemes.insert((*scheme).to_owned(), (*name).to_owned());
+                self.schemes
+                    .insert((*scheme).to_owned(), (*name).to_owned());
                 String::new()
             }
             ["/setacvalueindex", scheme, subgroup, setting, value]
             | ["/setdcvalueindex", scheme, subgroup, setting, value] => {
                 self.settings.insert(
                     format!("{}:{}:{}:{}", args[0], scheme, subgroup, setting),
-                    value.parse::<u32>().expect("setting value should be numeric"),
+                    value
+                        .parse::<u32>()
+                        .expect("setting value should be numeric"),
                 );
                 String::new()
             }
@@ -166,8 +175,8 @@ fn power_plan_mock_covers_command_apply_verify_and_rollback() {
         PowerPlanConsent::NotGranted,
         WINDOWS_BALANCED_SCHEME_GUID,
     );
-    let plan = build_liiiraa_powercfg_plan(&request)
-        .expect("desktop performance power plan should build");
+    let plan =
+        build_liiiraa_powercfg_plan(&request).expect("desktop performance power plan should build");
     let mut mock = PowerCfgMock::new(WINDOWS_BALANCED_SCHEME_GUID);
 
     for command in &plan.commands {
@@ -247,18 +256,18 @@ fn services_fixture_covers_conditional_apply_verify_and_rollback() {
 
     for backup in backups {
         let plan_item = item(&plan, &backup.tweak_id);
-        let rollback_request = RollbackRequest::new(
-            backup.tweak_id.clone(),
-            backup,
-            plan_item.rollback.clone(),
-        )
-        .expect("service rollback request should be valid");
+        let rollback_request =
+            RollbackRequest::new(backup.tweak_id.clone(), backup, plan_item.rollback.clone())
+                .expect("service rollback request should be valid");
         let rollback = execute_rollback(&mut fixture, &rollback_request)
             .expect("service rollback should restore fixture state");
         assert_eq!(rollback.status, RollbackStatus::Restored);
     }
 
-    assert_eq!(fixture.value(TARGET_SEARCH_INDEXER_SESSION_PAUSE), Some("running"));
+    assert_eq!(
+        fixture.value(TARGET_SEARCH_INDEXER_SESSION_PAUSE),
+        Some("running")
+    );
     assert_eq!(fixture.value(TARGET_SYSMAIN_START_MODE), Some("automatic"));
 }
 
@@ -266,9 +275,7 @@ fn services_fixture_covers_conditional_apply_verify_and_rollback() {
 #[test]
 fn guarded_live_windows_scan_runs_only_when_enabled() {
     if std::env::var(LIVE_WINDOWS_INTEGRATION_ENV).ok().as_deref() != Some("1") {
-        eprintln!(
-            "skipping live Windows integration; set {LIVE_WINDOWS_INTEGRATION_ENV}=1 to run"
-        );
+        eprintln!("skipping live Windows integration; set {LIVE_WINDOWS_INTEGRATION_ENV}=1 to run");
         return;
     }
 

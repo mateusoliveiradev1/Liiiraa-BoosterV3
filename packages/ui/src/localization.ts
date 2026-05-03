@@ -65,10 +65,10 @@ const enUS = {
       summary: "System score, trust, and next action"
     },
     scan: {
-      summary: "Read-only system inventory"
+      summary: "Safe PC checkup"
     },
     optimize: {
-      summary: "One-click safe tweaks"
+      summary: "Safe Boost and review lanes"
     },
     power: {
       summary: "Scoped Windows power plans"
@@ -98,7 +98,7 @@ const enUS = {
     agent: {
       label: "Agent",
       valueReady: "Ready",
-      detail: "No privileged writes are pending."
+      detail: "No privileged changes are pending."
     },
     backups: {
       label: "Backups",
@@ -133,7 +133,7 @@ const enUS = {
     trust: "Trust",
     ready: "Ready",
     required: "Required",
-    noMutation: "No mutation",
+    noMutation: "Not applied",
     none: "None"
   },
   risk: {
@@ -150,26 +150,26 @@ const enUS = {
     criticalShort: "Critical"
   },
   modes: {
-    optimizationMode: "Optimization mode",
+    optimizationMode: "Boost mode",
     safeDescription: "Low-risk reversible changes only.",
     competitiveDescription: "Performance tradeoffs with explicit review.",
     labDescription: "Experimental changes behind per-category opt-in.",
     blockedDescription: "Educational items that cannot be applied."
   },
   actions: {
-    startScan: "Start scan",
-    cancelScan: "Cancel scan",
-    generatePlan: "Generate plan",
-    continueScan: "Continue scan",
-    retryScan: "Retry scan",
+    startScan: "Start Smart Scan",
+    cancelScan: "Cancel Smart Scan",
+    generatePlan: "Open Smart Boost",
+    continueScan: "Continue Smart Scan",
+    retryScan: "Retry Smart Scan",
     reviewPlan: "Review plan",
     openRollback: "Open rollback",
-    applySafeOnly: "Apply safe only",
-    applySafePlan: "Apply safe plan",
-    includeCompetitive: "Include competitive",
-    inspectLab: "Inspect lab",
+    applySafeOnly: "Apply Safe Boost",
+    applySafePlan: "Apply Safe Boost",
+    includeCompetitive: "Review Competitive",
+    inspectLab: "Inspect Lab",
     inspectLabItems: "Inspect lab items",
-    exportPlan: "Export plan",
+    exportPlan: "Export Boost Plan",
     cancel: "Cancel",
     stageBalanced: "Stage balanced",
     reviewCompetitive: "Review competitive",
@@ -192,13 +192,13 @@ const enUS = {
     next: "Next"
   },
   tooltips: {
-    startScan: "Start a read-only scan before any plan can be generated.",
-    cancelScan: "Stop the current scan without applying changes.",
-    applySafeOnly: "Apply only safe reversible changes.",
-    applySafePlan: "Apply only safe reversible changes.",
+    startScan: "Check your PC safely before Smart Boost opens.",
+    cancelScan: "Stop Smart Scan. No changes are applied.",
+    applySafeOnly: "Apply the reversible Safe Boost changes.",
+    applySafePlan: "Apply the reversible Safe Boost changes.",
     includeCompetitive: "Include performance tradeoffs after explicit review.",
     inspectLab: "Open Lab-only recommendations without applying them.",
-    exportPlan: "Export the visible optimization plan.",
+    exportPlan: "Export the Smart Boost plan.",
     cancel: "Cancel the current optimization review.",
     stageBalanced: "Stage the reversible balanced power plan.",
     reviewCompetitive: "Review competitive power tradeoffs before applying.",
@@ -224,7 +224,7 @@ const enUS = {
     benchmarkProofAria: "Benchmark proof chart",
     storyAria: "Liiiraa primitive story render",
     systemStatus: "System status",
-    tweakLedgerAria: "Audited tweak ledger",
+    tweakLedgerAria: "Boost change details",
     planActions: "Plan actions",
     metric: {
       measuring: "Measuring",
@@ -238,25 +238,25 @@ const enUS = {
       sessionRollbackAria: "{session} rollback actions"
     },
     plan: {
-      gatePolicyAria: "Plan group gate policy",
-      tweaksAria: "Plan tweaks",
+      gatePolicyAria: "Smart Boost safety rules",
+      tweaksAria: "Boost changes",
       riskLabel: "Risk label",
       consent: "Consent",
-      defaultApply: "Default apply",
-      noApplyControl: "No apply control",
+      defaultApply: "Ready to apply",
+      noApplyControl: "Blocked from apply",
       reviewRequired: "Review required",
-      applyControlEnabled: "Apply control enabled for safe defaults",
-      noApplyControlRendered: "No apply control is rendered for blocked rows",
-      reviewOnlyUntilConsent: "Review-only until explicit consent",
+      applyControlEnabled: "Safe Boost is ready",
+      noApplyControlRendered: "Blocked items stay informational",
+      reviewOnlyUntilConsent: "Review required before apply",
       noExtraConsent: "No extra consent required",
       competitiveConsent: "Explicit performance tradeoff consent required",
       labConsent: "Advanced opt-in and benchmark framing required",
       deniedByPolicy: "Denied by safety policy",
       rebootMarked: "{count} marked",
-      noRebootQueued: "No reboot prompt is queued.",
-      bucketChangeSummaries: "{count} change summaries visible in this bucket.",
-      blockedRollbackDetail: "Blocked rows have no apply control.",
-      writeRollbackDetail: "Every write row keeps a rollback value."
+      noRebootQueued: "No restart note is queued.",
+      bucketChangeSummaries: "{count} changes in this lane.",
+      blockedRollbackDetail: "Blocked items are never applied.",
+      writeRollbackDetail: "A restore point is prepared before apply."
     },
     rollback: {
       noReboot: "No reboot",
@@ -376,10 +376,10 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
         summary: "Score, confianca e proxima acao"
       },
       scan: {
-        summary: "Inventario do sistema somente leitura"
+        summary: "Checkup seguro do PC"
       },
       optimize: {
-        summary: "Tweaks seguros em um clique"
+        summary: "Boost seguro e faixas de revisao"
       },
       power: {
         summary: "Planos de energia Windows com escopo"
@@ -409,7 +409,7 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       agent: {
         label: "Agente",
         valueReady: "Pronto",
-        detail: "Nenhuma escrita privilegiada esta pendente."
+        detail: "Nenhuma alteracao privilegiada esta pendente."
       },
       backups: {
         label: "Backups",
@@ -444,7 +444,7 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       trust: "Confianca",
       ready: "Pronto",
       required: "Obrigatorio",
-      noMutation: "Sem mutacao",
+      noMutation: "Nao aplicado",
       none: "Nenhum"
     },
     risk: {
@@ -461,26 +461,26 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       criticalShort: "Critico"
     },
     modes: {
-      optimizationMode: "Modo de otimizacao",
+      optimizationMode: "Modo do boost",
       safeDescription: "Somente alteracoes reversiveis de baixo risco.",
       competitiveDescription: "Trocas de desempenho com revisao explicita.",
       labDescription: "Alteracoes experimentais com opt-in por categoria.",
       blockedDescription: "Itens educativos que nao podem ser aplicados."
     },
     actions: {
-      startScan: "Iniciar scan",
-      cancelScan: "Cancelar scan",
-      generatePlan: "Gerar plano",
-      continueScan: "Continuar scan",
-      retryScan: "Tentar scan novamente",
+      startScan: "Iniciar Smart Scan",
+      cancelScan: "Cancelar Smart Scan",
+      generatePlan: "Abrir Smart Boost",
+      continueScan: "Continuar Smart Scan",
+      retryScan: "Tentar Smart Scan novamente",
       reviewPlan: "Revisar plano",
       openRollback: "Abrir reversao",
-      applySafeOnly: "Aplicar somente seguro",
-      applySafePlan: "Aplicar plano seguro",
-      includeCompetitive: "Incluir competitivo",
-      inspectLab: "Inspecionar laboratorio",
+      applySafeOnly: "Aplicar Safe Boost",
+      applySafePlan: "Aplicar Safe Boost",
+      includeCompetitive: "Revisar Competitivo",
+      inspectLab: "Inspecionar Lab",
       inspectLabItems: "Inspecionar itens de laboratorio",
-      exportPlan: "Exportar plano",
+      exportPlan: "Exportar plano Smart Boost",
       cancel: "Cancelar",
       stageBalanced: "Preparar equilibrado",
       reviewCompetitive: "Revisar competitivo",
@@ -502,6 +502,46 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       previous: "Anterior",
       next: "Proximo"
     },
+    tooltips: {
+      startScan: "Verifica o PC com seguranca antes de abrir o Smart Boost.",
+      cancelScan: "Para o Smart Scan. Nenhuma alteracao e aplicada.",
+      applySafeOnly: "Aplica as alteracoes reversiveis do Safe Boost.",
+      applySafePlan: "Aplica as alteracoes reversiveis do Safe Boost.",
+      includeCompetitive: "Inclui trocas de desempenho depois da revisao explicita.",
+      inspectLab: "Abre recomendacoes de laboratorio sem aplica-las.",
+      exportPlan: "Exporta o plano Smart Boost.",
+      cancel: "Cancela a revisao de otimizacao atual.",
+      stageBalanced: "Prepara o plano equilibrado reversivel.",
+      reviewCompetitive: "Revisa trocas competitivas de energia antes de aplicar.",
+      backupProfiles: "Faz backup dos perfis NVIDIA antes de preparar alteracoes.",
+      stagePubgProfile: "Prepara o perfil PUBG depois do backup de perfil.",
+      openBenchmark: "Abre a prova de benchmark antes de aplicar alteracoes GPU.",
+      snapshotConfig: "Captura a configuracao do PUBG antes das recomendacoes.",
+      startDxBenchmark: "Inicia a comparacao de benchmark DirectX.",
+      openNvidiaProfile: "Abre o fluxo de perfil NVIDIA vinculado.",
+      captureBefore: "Captura a rodada de benchmark antes.",
+      compareAfter: "Compara a rodada depois.",
+      exportReport: "Exporta prova e metadados do benchmark.",
+      rollbackSession: "Restaura a sessao de otimizacao anterior.",
+      restoreSelectedSession: "Restaura a sessao selecionada",
+      restoreNvidiaProfileBackup: "Restaura o backup de perfil NVIDIA",
+      exportRollbackAudit: "Exporta a auditoria de reversao",
+      restoreAllChangesFromSession: "Restaura todas as alteracoes de {session}",
+      restoreGpuProfilesFromSession: "Restaura perfis GPU de {session}",
+      showPreviousFrameSamples: "Mostra amostras de quadros anteriores",
+      showNextFrameSamples: "Mostra proximas amostras de quadros"
+    },
+    primitives: {
+      benchmarkProofAria: "Grafico de prova de benchmark",
+      storyAria: "Renderizacao de primitives Liiiraa",
+      systemStatus: "Status do sistema",
+      tweakLedgerAria: "Detalhes das alteracoes do boost",
+      planActions: "Acoes do plano",
+      metric: {
+        measuring: "Medindo",
+        delta: "Delta"
+      }
+    },
     workflow: {
       actions: {
         optimizationPlanAria: "Acoes do plano de otimizacao",
@@ -509,25 +549,25 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
         sessionRollbackAria: "Acoes de reversao de {session}"
       },
       plan: {
-        gatePolicyAria: "Politica de portao do plano",
-        tweaksAria: "Ajustes do plano",
+        gatePolicyAria: "Regras de seguranca do Smart Boost",
+        tweaksAria: "Alteracoes do boost",
         riskLabel: "Rotulo de risco",
         consent: "Consentimento",
-        defaultApply: "Aplicacao padrao",
-        noApplyControl: "Sem controle de aplicacao",
+        defaultApply: "Pronto para aplicar",
+        noApplyControl: "Bloqueado para aplicar",
         reviewRequired: "Revisao obrigatoria",
-        applyControlEnabled: "Controle de aplicacao habilitado para padroes seguros",
-        noApplyControlRendered: "Nenhum controle de aplicacao e renderizado para linhas bloqueadas",
-        reviewOnlyUntilConsent: "Somente revisao ate consentimento explicito",
+        applyControlEnabled: "Safe Boost pronto",
+        noApplyControlRendered: "Itens bloqueados ficam apenas informativos",
+        reviewOnlyUntilConsent: "Revisao obrigatoria antes de aplicar",
         noExtraConsent: "Nenhum consentimento extra necessario",
         competitiveConsent: "Consentimento explicito de troca de desempenho necessario",
         labConsent: "Opt-in avancado e benchmark obrigatorios",
         deniedByPolicy: "Negado pela politica de seguranca",
         rebootMarked: "{count} marcados",
-        noRebootQueued: "Nenhum reinicio esta na fila.",
-        bucketChangeSummaries: "{count} resumos de alteracao visiveis neste grupo.",
-        blockedRollbackDetail: "Linhas bloqueadas nao tem controle de aplicacao.",
-        writeRollbackDetail: "Cada escrita mantem um valor de reversao."
+        noRebootQueued: "Nenhuma observacao de reinicio esta na fila.",
+        bucketChangeSummaries: "{count} alteracoes nesta faixa.",
+        blockedRollbackDetail: "Itens bloqueados nunca sao aplicados.",
+        writeRollbackDetail: "Um ponto de restauracao e preparado antes de aplicar."
       },
       rollback: {
         noReboot: "Sem reinicio",
@@ -594,10 +634,10 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
         summary: "Score, confianza y siguiente accion"
       },
       scan: {
-        summary: "Inventario del sistema solo lectura"
+        summary: "Chequeo seguro del PC"
       },
       optimize: {
-        summary: "Ajustes seguros en un clic"
+        summary: "Boost seguro y carriles de revision"
       },
       power: {
         summary: "Planes de energia Windows con alcance"
@@ -627,7 +667,7 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       agent: {
         label: "Agente",
         valueReady: "Listo",
-        detail: "No hay escrituras privilegiadas pendientes."
+        detail: "No hay cambios privilegiados pendientes."
       },
       backups: {
         label: "Copias",
@@ -662,7 +702,7 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       trust: "Confianza",
       ready: "Listo",
       required: "Obligatorio",
-      noMutation: "Sin mutacion",
+      noMutation: "No aplicado",
       none: "Ninguno"
     },
     risk: {
@@ -679,26 +719,26 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       criticalShort: "Critico"
     },
     modes: {
-      optimizationMode: "Modo de optimizacion",
+      optimizationMode: "Modo del boost",
       safeDescription: "Solo cambios reversibles de bajo riesgo.",
       competitiveDescription: "Intercambios de rendimiento con revision explicita.",
       labDescription: "Cambios experimentales con opt-in por categoria.",
       blockedDescription: "Elementos educativos que no se pueden aplicar."
     },
     actions: {
-      startScan: "Iniciar analisis",
-      cancelScan: "Cancelar analisis",
-      generatePlan: "Generar plan",
-      continueScan: "Continuar analisis",
-      retryScan: "Reintentar analisis",
+      startScan: "Iniciar Smart Scan",
+      cancelScan: "Cancelar Smart Scan",
+      generatePlan: "Abrir Smart Boost",
+      continueScan: "Continuar Smart Scan",
+      retryScan: "Reintentar Smart Scan",
       reviewPlan: "Revisar plan",
       openRollback: "Abrir reversion",
-      applySafeOnly: "Aplicar solo seguro",
-      applySafePlan: "Aplicar plan seguro",
-      includeCompetitive: "Incluir competitivo",
-      inspectLab: "Inspeccionar laboratorio",
+      applySafeOnly: "Aplicar Safe Boost",
+      applySafePlan: "Aplicar Safe Boost",
+      includeCompetitive: "Revisar Competitivo",
+      inspectLab: "Inspeccionar Lab",
       inspectLabItems: "Inspeccionar elementos de laboratorio",
-      exportPlan: "Exportar plan",
+      exportPlan: "Exportar plan Smart Boost",
       cancel: "Cancelar",
       stageBalanced: "Preparar equilibrado",
       reviewCompetitive: "Revisar competitivo",
@@ -720,6 +760,46 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
       previous: "Anterior",
       next: "Siguiente"
     },
+    tooltips: {
+      startScan: "Comprueba el PC con seguridad antes de abrir Smart Boost.",
+      cancelScan: "Detiene Smart Scan. No se aplica ningun cambio.",
+      applySafeOnly: "Aplica los cambios reversibles de Safe Boost.",
+      applySafePlan: "Aplica los cambios reversibles de Safe Boost.",
+      includeCompetitive: "Incluye intercambios de rendimiento despues de la revision explicita.",
+      inspectLab: "Abre recomendaciones de laboratorio sin aplicarlas.",
+      exportPlan: "Exporta el plan Smart Boost.",
+      cancel: "Cancela la revision de optimizacion actual.",
+      stageBalanced: "Prepara el plan equilibrado reversible.",
+      reviewCompetitive: "Revisa intercambios competitivos de energia antes de aplicar.",
+      backupProfiles: "Respaldar perfiles NVIDIA antes de preparar cambios.",
+      stagePubgProfile: "Prepara el perfil PUBG despues del respaldo de perfil.",
+      openBenchmark: "Abre la prueba de benchmark antes de aplicar cambios GPU.",
+      snapshotConfig: "Captura la configuracion de PUBG antes de las recomendaciones.",
+      startDxBenchmark: "Inicia la comparacion de benchmark DirectX.",
+      openNvidiaProfile: "Abre el flujo de perfil NVIDIA vinculado.",
+      captureBefore: "Captura la corrida de benchmark antes.",
+      compareAfter: "Compara la corrida despues.",
+      exportReport: "Exporta prueba y metadatos del benchmark.",
+      rollbackSession: "Restaura la sesion de optimizacion anterior.",
+      restoreSelectedSession: "Restaura la sesion seleccionada",
+      restoreNvidiaProfileBackup: "Restaura el respaldo de perfil NVIDIA",
+      exportRollbackAudit: "Exporta la auditoria de reversion",
+      restoreAllChangesFromSession: "Restaura todos los cambios de {session}",
+      restoreGpuProfilesFromSession: "Restaura perfiles GPU de {session}",
+      showPreviousFrameSamples: "Muestra muestras de cuadros anteriores",
+      showNextFrameSamples: "Muestra siguientes muestras de cuadros"
+    },
+    primitives: {
+      benchmarkProofAria: "Grafico de prueba de benchmark",
+      storyAria: "Renderizado de primitives Liiiraa",
+      systemStatus: "Estado del sistema",
+      tweakLedgerAria: "Detalles de cambios del boost",
+      planActions: "Acciones del plan",
+      metric: {
+        measuring: "Midiendo",
+        delta: "Delta"
+      }
+    },
     workflow: {
       actions: {
         optimizationPlanAria: "Acciones del plan de optimizacion",
@@ -727,25 +807,25 @@ export const optimizerLocaleCatalogs: Record<OptimizerLocale, PartialOptimizerLo
         sessionRollbackAria: "Acciones de reversion de {session}"
       },
       plan: {
-        gatePolicyAria: "Politica de puerta del plan",
-        tweaksAria: "Ajustes del plan",
+        gatePolicyAria: "Reglas de seguridad de Smart Boost",
+        tweaksAria: "Cambios del boost",
         riskLabel: "Etiqueta de riesgo",
         consent: "Consentimiento",
-        defaultApply: "Aplicacion predeterminada",
-        noApplyControl: "Sin control de aplicacion",
+        defaultApply: "Listo para aplicar",
+        noApplyControl: "Bloqueado para aplicar",
         reviewRequired: "Revision obligatoria",
-        applyControlEnabled: "Control de aplicacion habilitado para valores seguros",
-        noApplyControlRendered: "No se muestra control de aplicacion para filas bloqueadas",
-        reviewOnlyUntilConsent: "Solo revision hasta consentimiento explicito",
+        applyControlEnabled: "Safe Boost listo",
+        noApplyControlRendered: "Los elementos bloqueados quedan solo informativos",
+        reviewOnlyUntilConsent: "Revision requerida antes de aplicar",
         noExtraConsent: "No requiere consentimiento adicional",
         competitiveConsent: "Consentimiento explicito de intercambio de rendimiento requerido",
         labConsent: "Opt-in avanzado y benchmark requeridos",
         deniedByPolicy: "Denegado por la politica de seguridad",
         rebootMarked: "{count} marcados",
-        noRebootQueued: "No hay reinicio en cola.",
-        bucketChangeSummaries: "{count} resumenes de cambio visibles en este grupo.",
-        blockedRollbackDetail: "Las filas bloqueadas no tienen control de aplicacion.",
-        writeRollbackDetail: "Cada escritura mantiene un valor de reversion."
+        noRebootQueued: "No hay nota de reinicio en cola.",
+        bucketChangeSummaries: "{count} cambios en este carril.",
+        blockedRollbackDetail: "Los elementos bloqueados nunca se aplican.",
+        writeRollbackDetail: "Se prepara un punto de restauracion antes de aplicar."
       },
       rollback: {
         noReboot: "Sin reinicio",

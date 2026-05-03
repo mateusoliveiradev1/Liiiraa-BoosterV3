@@ -189,6 +189,12 @@
           "markdownDescription": "Enables the get_ipc_security_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_live_resource_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-live-resource-snapshot",
+          "markdownDescription": "Enables the get_live_resource_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_updater_configuration command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-updater-configuration",
@@ -211,6 +217,12 @@
           "type": "string",
           "const": "deny-get-ipc-security-status",
           "markdownDescription": "Denies the get_ipc_security_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_live_resource_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-live-resource-snapshot",
+          "markdownDescription": "Denies the get_live_resource_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the get_updater_configuration command without any pre-configured scope.",

@@ -8,16 +8,13 @@ use optimizer_core::{
         is_security_tradeoff_tweak_id, security_tradeoff_plan_is_not_safe_default,
         security_tradeoff_plan_requires_explicit_consent, SecurityFeatureDesiredState,
         SecurityFeatureState, SecurityTradeoffConsent, SecurityTradeoffPlanRequest,
-        VirtualizationStackUse, SECURITY_HVCI_TRADEOFF_TWEAK_ID,
-        SECURITY_VMP_TRADEOFF_TWEAK_ID,
+        VirtualizationStackUse,
     },
     tweak_contracts::{PlanAction, TweakOperationKind, TweakPlan},
 };
 
 use crate::scan::DeviceGuardScan;
-use crate::{
-    SystemScanReport, WindowsOptionalFeatureScanItem, WindowsRollbackFixture,
-};
+use crate::{SystemScanReport, WindowsOptionalFeatureScanItem, WindowsRollbackFixture};
 
 /// Summary for fixture apply or verify work.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +80,11 @@ pub fn apply_security_tradeoff_plan_to_fixture(
 
     let mut summary = SecurityTradeoffSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
         summary.reboot_required |=
@@ -115,7 +116,11 @@ pub fn verify_security_tradeoff_plan_fixture(
 
     let mut summary = SecurityTradeoffSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
         summary.reboot_required |=
@@ -166,14 +171,10 @@ fn security_tradeoff_request_from_scan(
     request.hvci = SecurityFeatureState::from_registry_dword(report.security.hvci.enabled)
         .or_else(device_guard_service_state(&report.security.device_guard, 2));
     request.hvci_locked = report.security.hvci.locked.is_some_and(|value| value != 0);
-    request.vmp = optional_feature_state(
-        &report.security.optional_features,
-        "VirtualMachinePlatform",
-    );
-    request.hyperv = optional_feature_state(
-        &report.security.optional_features,
-        "Microsoft-Hyper-V-All",
-    );
+    request.vmp =
+        optional_feature_state(&report.security.optional_features, "VirtualMachinePlatform");
+    request.hyperv =
+        optional_feature_state(&report.security.optional_features, "Microsoft-Hyper-V-All");
     request.wsl = optional_feature_state(
         &report.security.optional_features,
         "Microsoft-Windows-Subsystem-Linux",
@@ -201,9 +202,15 @@ fn device_guard_service_state(
     device_guard: &DeviceGuardScan,
     service_code: u32,
 ) -> SecurityFeatureState {
-    if device_guard.security_services_running.contains(&service_code) {
+    if device_guard
+        .security_services_running
+        .contains(&service_code)
+    {
         SecurityFeatureState::Enabled
-    } else if device_guard.security_services_configured.contains(&service_code) {
+    } else if device_guard
+        .security_services_configured
+        .contains(&service_code)
+    {
         SecurityFeatureState::Disabled
     } else {
         SecurityFeatureState::Unknown
@@ -234,9 +241,7 @@ fn virtualization_stack_use_from_scan(
     }
 }
 
-fn validate_explicit_tradeoff_plan(
-    plan: &TweakPlan,
-) -> Result<(), SecurityTradeoffSettingsError> {
+fn validate_explicit_tradeoff_plan(plan: &TweakPlan) -> Result<(), SecurityTradeoffSettingsError> {
     if security_tradeoff_plan_is_conservative(plan) {
         Ok(())
     } else {
@@ -410,7 +415,12 @@ impl SecurityTradeoffSettingsError {
 
 impl fmt::Display for SecurityTradeoffSettingsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}: {}", self.reason.as_str(), self.reason.message())?;
+        write!(
+            formatter,
+            "{}: {}",
+            self.reason.as_str(),
+            self.reason.message()
+        )?;
 
         if let Some(tweak_id) = self.tweak_id() {
             write!(formatter, " ({tweak_id})")?;
@@ -431,7 +441,10 @@ mod tests {
     use super::*;
     use optimizer_core::{
         backup::{capture_plan_backups, execute_rollback, RollbackRequest},
-        security_tradeoff::{TARGET_HVCI_ENABLED, TARGET_VMP_FEATURE},
+        security_tradeoff::{
+            SECURITY_HVCI_TRADEOFF_TWEAK_ID, SECURITY_VMP_TRADEOFF_TWEAK_ID, TARGET_HVCI_ENABLED,
+            TARGET_VMP_FEATURE,
+        },
         tweak_contracts::{
             BackupRequirement, PlannedChange, RebootPolicy, RollbackKind, RollbackPlan,
             SessionScope, TweakCategory, TweakMode, TweakPlanItem, TweakRisk,

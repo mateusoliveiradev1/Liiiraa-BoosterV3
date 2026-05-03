@@ -12,8 +12,6 @@ use optimizer_core::{
         AdapterPowerSavingState, NetworkAdapterAdvancedProperty, NetworkAdapterInspection,
         NetworkAdapterPowerPlanRequest, NetworkAdvancedTuningPlanRequest, NetworkControlConsent,
         NET_ADAPTER_POWER_SAVING_OFF_TWEAK_ID, NET_EEE_GREEN_OFF_TWEAK_ID,
-        NET_INTERRUPT_MODERATION_LAB_TWEAK_ID, NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID,
-        NET_RSC_PROFILE_TWEAK_ID, NET_RSC_VPN_DIAGNOSIS_TWEAK_ID, NET_RSS_ENSURE_TWEAK_ID,
     },
     power_plan::{DevicePowerClass, PowerSourceState},
     tweak_contracts::{PlanAction, TweakMode, TweakOperationKind, TweakPlan},
@@ -134,7 +132,11 @@ pub fn apply_network_adapter_power_plan_to_fixture(
 ) -> Result<NetworkAdapterSettingsSummary, NetworkAdapterSettingsError> {
     let mut summary = NetworkAdapterSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -162,7 +164,11 @@ pub fn verify_network_adapter_power_plan_fixture(
 ) -> Result<NetworkAdapterSettingsSummary, NetworkAdapterSettingsError> {
     let mut summary = NetworkAdapterSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -198,7 +204,11 @@ pub fn apply_network_advanced_tuning_plan_to_fixture(
 
     let mut summary = NetworkAdapterSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_advanced_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -228,7 +238,11 @@ pub fn verify_network_advanced_tuning_plan_fixture(
 
     let mut summary = NetworkAdapterSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_advanced_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -513,7 +527,12 @@ impl NetworkAdapterSettingsError {
 
 impl fmt::Display for NetworkAdapterSettingsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}: {}", self.reason.as_str(), self.reason.message())?;
+        write!(
+            formatter,
+            "{}: {}",
+            self.reason.as_str(),
+            self.reason.message()
+        )?;
 
         if let Some(tweak_id) = self.tweak_id() {
             write!(formatter, " ({tweak_id})")?;
@@ -534,7 +553,10 @@ mod tests {
     use super::*;
     use optimizer_core::{
         backup::{capture_plan_backups, execute_rollback, RollbackRequest},
-        network::network_adapter_power_saving_target,
+        network::{
+            network_adapter_power_saving_target, NET_INTERRUPT_MODERATION_LAB_TWEAK_ID,
+            NET_OFFLOADS_KEEP_DEFAULT_TWEAK_ID, NET_RSS_ENSURE_TWEAK_ID,
+        },
         tweak_contracts::{
             BackupRequirement, PlannedChange, RebootPolicy, RollbackKind, RollbackPlan,
             SessionScope, TweakCategory, TweakMode, TweakOperationKind, TweakPlanItem, TweakRisk,
@@ -767,8 +789,10 @@ mod tests {
             NET_INTERRUPT_MODERATION_LAB_TWEAK_ID,
             "netadapter:ethernet/advanced/interrupt-moderation",
         );
-        let mut fixture = WindowsRollbackFixture::new()
-            .with_value("netadapter:ethernet/advanced/interrupt-moderation", "Enabled");
+        let mut fixture = WindowsRollbackFixture::new().with_value(
+            "netadapter:ethernet/advanced/interrupt-moderation",
+            "Enabled",
+        );
 
         let error = apply_network_advanced_tuning_plan_to_fixture(&mut fixture, &plan)
             .expect_err("Safe/default advanced NIC apply must be denied");
@@ -798,11 +822,7 @@ mod tests {
         );
     }
 
-    fn advanced_network_plan(
-        requested_mode: TweakMode,
-        tweak_id: &str,
-        target: &str,
-    ) -> TweakPlan {
+    fn advanced_network_plan(requested_mode: TweakMode, tweak_id: &str, target: &str) -> TweakPlan {
         TweakPlan {
             id: "plan-advanced-network-fixture".to_owned(),
             requested_mode,

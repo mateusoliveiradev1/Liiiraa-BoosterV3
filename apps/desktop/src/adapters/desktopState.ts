@@ -501,12 +501,12 @@ function createRouteInspectors(
     },
     optimize: {
       title: "Smart Boost",
-      eyebrow: `${routes.optimize.groups.length} buckets`,
-      summary: "Apply safe tweaks first; competitive and lab changes stay review-gated.",
+      eyebrow: `${routes.optimize.groups.find((group) => group.id === "safe")?.tweaks.length ?? 0} safe changes ready`,
+      summary: "Apply the reversible Safe Boost first, then review Competitive and Lab recommendations when you want more control.",
       tone: "success",
       facts: routes.optimize.groups.map((group) => [
         group.label,
-        `${group.tweaks.length} changes, ${group.applyEnabled ? "apply enabled" : "review required"}`
+        `${group.tweaks.length} changes, ${group.applyEnabled ? "ready to apply" : "review first"}`
       ]),
       actions: routes.optimize.actions.map((action) => action.label)
     },
@@ -549,12 +549,12 @@ function createRouteInspectors(
     scan: {
       title: "Smart Scan",
       eyebrow: routes.scan.progress.label,
-      summary: routes.scan.progress.current,
+      summary: "Check this PC safely and unlock the Smart Boost plan from confirmed findings.",
       tone: "active",
       facts: [
         ["Progress", `${routes.scan.progress.percent}%`],
         ["Scopes", `${routes.scan.scopes.filter((scope) => scope.checked).length}/${routes.scan.scopes.length}`],
-        ["Findings", `${routes.scan.findings.length} visible`]
+        ["Recommendations", `${routes.scan.findings.length} ready`]
       ],
       actions: [
         tOptimizer("actions.startScan"),

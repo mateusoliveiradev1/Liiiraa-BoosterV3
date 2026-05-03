@@ -9,12 +9,12 @@ const routeStates = [
   {
     id: "scan",
     label: "Smart Scan",
-    expectations: [/Read-only system scan/i, /Scan scope/i, /Graphics path/i, /Findings/i, /Generate plan/i]
+    expectations: [/Safe PC checkup/i, /Choose checks/i, /Graphics check/i, /Recommendations/i, /Open Smart Boost/i]
   },
   {
     id: "optimize",
     label: "Smart Boost",
-    expectations: [/Safety-gated plan/i, /^Safe$/i, /^Competitive$/i, /^Lab$/i, /^Blocked$/i, /Rollback availability/i]
+    expectations: [/Safe Boost control/i, /^Safe$/i, /^Competitive$/i, /^Lab$/i, /^Blocked$/i, /Recovery availability/i]
   },
   {
     id: "power",
@@ -44,22 +44,28 @@ const routeStates = [
   {
     id: "settings",
     label: "Settings",
-    expectations: [/Privacy, updates, and trust/i, /Signed by Liiiraa/i, /Privacy and telemetry/i, /Signing and update trust/i]
+    expectations: [
+      /Privacy, updates, and trust/i,
+      /Signed by Liiiraa/i,
+      /Privacy and telemetry/i,
+      /Live resource monitor/i,
+      /Signing and update trust/i
+    ]
   }
 ];
 
 const localeVisualCases = [
   {
-    actions: [/Iniciar scan/i, /Cancelar scan/i],
-    button: /Aplicar somente seguro/i,
+    actions: [/Iniciar Smart Scan/i, /Cancelar Smart Scan/i],
+    button: /Aplicar Safe Boost/i,
     locale: "pt-BR",
     nav: /Smart Boost/i,
     status: /Atualizador/i,
     tableHeaders: [/Alteracao/i, /Impacto/i, /Confianca/i, /Risco/i, /Reversao/i]
   },
   {
-    actions: [/Iniciar analisis/i, /Cancelar analisis/i],
-    button: /Aplicar solo seguro/i,
+    actions: [/Iniciar Smart Scan/i, /Cancelar Smart Scan/i],
+    button: /Aplicar Safe Boost/i,
     locale: "es-ES",
     nav: /Smart Boost/i,
     status: /Actualizador/i,
@@ -92,21 +98,31 @@ test("desktop command center visual smoke covers navigation and critical optimiz
   await page.mouse.move(560, 240);
   await expect(page.locator(".app-shell")).toHaveAttribute("data-sidebar-collapsed", "true");
 
+  await page.getByRole("button", { name: "Help" }).click();
+  const infoDialog = page.getByRole("dialog", { name: "Desktop information" });
+  await expect(infoDialog).toBeVisible();
+  await expect(infoDialog).toContainText("Help and live data");
+  await expect(infoDialog).toContainText("Browser preview");
+  await expect(infoDialog).not.toContainText(/RTX 4070|7800X3D|NVIDIA 551\.86|\+11\.8%/);
+  await expect(page.locator("main.command-center")).toHaveAttribute("id", "dashboard");
+  await page.getByRole("button", { name: "Close information" }).click();
+  await expect(page.getByRole("dialog", { name: "Desktop information" })).toBeHidden();
+
   for (const route of routeStates) {
     await openRoute(page, route.label, route.id);
     await expectRouteOptimizerState(page, route);
   }
 
   await openRoute(page, "Smart Boost", "optimize");
-  await expect(page.getByRole("heading", { name: "Safety-gated plan" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Safe Boost control" })).toBeVisible();
   await expect(page.getByRole("heading", { exact: true, name: "Safe" })).toBeVisible();
   await expect(page.getByRole("heading", { exact: true, name: "Competitive" })).toBeVisible();
   await expect(page.getByRole("heading", { exact: true, name: "Lab" })).toBeVisible();
   await expect(page.getByRole("heading", { exact: true, name: "Blocked" })).toBeVisible();
-  await expect(page.getByText("Default apply").first()).toBeVisible();
+  await expect(page.getByText("Ready to apply").first()).toBeVisible();
   await expect(page.getByText("Review required").first()).toBeVisible();
-  await expect(page.getByText("No apply control").first()).toBeVisible();
-  await expect(page.getByText("Rollback availability")).toBeVisible();
+  await expect(page.getByText("Blocked from apply").first()).toBeVisible();
+  await expect(page.getByText("Recovery availability")).toBeVisible();
 
   await openRoute(page, "Recovery", "rollback");
   await expect(page.getByRole("heading", { name: "Session recovery timeline" })).toBeVisible();
@@ -120,6 +136,10 @@ test("desktop command center visual smoke covers navigation and critical optimiz
   await expect(page.getByRole("heading", { name: "Privacy and telemetry" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Consent gates" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Signing and update trust" })).toBeVisible();
+  await expect(page.getByText("Live resource monitor").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Turn off" })).toBeVisible();
+  await page.getByRole("button", { name: "Turn off" }).click();
+  await expect(page.getByRole("button", { name: "Turn on" })).toBeVisible();
   await expect(page.getByText("Performance telemetry").first()).toBeVisible();
   await expect(page.getByText("Signature verified").first()).toBeVisible();
 });
@@ -129,9 +149,9 @@ test("dashboard actions open active tweak workflows", async ({ page }) => {
   await page.goto("/#dashboard");
 
   await expect(page.getByRole("heading", { name: "All available tweaks on the dashboard" })).toBeVisible();
-  await expect(page.locator(".dashboard-tweak-matrix")).toContainText("Disable background recording");
-  await expect(page.locator(".dashboard-tweak-matrix")).toContainText("Adapter-specific RSC experiment");
-  await expect(page.locator(".dashboard-tweak-matrix")).toContainText("Deny global Defender disable");
+  await expect(page.locator(".dashboard-tweak-matrix")).toContainText("Pause unused background recording");
+  await expect(page.locator(".dashboard-tweak-matrix")).toContainText("Test adapter-specific RSC");
+  await expect(page.locator(".dashboard-tweak-matrix")).toContainText("Keep Defender protection on");
 
   await page.getByRole("button", { name: "Run Smart Boost" }).click();
   await expect(page.locator("main.command-center")).toHaveAttribute("id", "optimize");
@@ -152,6 +172,27 @@ test("dashboard actions open active tweak workflows", async ({ page }) => {
   await page.goto("/#dashboard");
   await page.getByRole("button", { name: /^Benchmark:/i }).click();
   await expect(page.locator("main.command-center")).toHaveAttribute("id", "benchmarks");
+});
+
+test("smart scan completes and unlocks the tweak plan", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/#scan");
+
+  const scanWorkflow = page.getByLabel("Scan workflow");
+
+  await expect(page.locator("main.command-center")).toHaveAttribute("id", "scan");
+  await expect(scanWorkflow.getByRole("heading", { name: "Safe PC checkup" })).toBeVisible();
+  await expect(scanWorkflow.getByRole("heading", { name: "Smart Boost preview" })).toBeVisible();
+  await expect(scanWorkflow.getByRole("button", { name: "Open Smart Boost" })).toBeDisabled();
+
+  await scanWorkflow.getByRole("button", { name: "Start Smart Scan" }).click();
+  await expect(scanWorkflow.getByRole("button", { name: "Cancel Smart Scan" })).toBeEnabled();
+  await expect(scanWorkflow.locator(".smart-scan-ring")).toHaveAttribute("aria-valuenow", "100", { timeout: 8000 });
+  await expect(scanWorkflow.getByRole("button", { name: "Open Smart Boost" })).toBeEnabled();
+
+  await scanWorkflow.getByRole("button", { name: "Open Smart Boost" }).click();
+  await expect(page.locator("main.command-center")).toHaveAttribute("id", "optimize");
+  await expect(page.getByRole("heading", { name: "Safe Boost control" })).toBeVisible();
 });
 
 for (const viewport of screenshotViewports) {

@@ -6,9 +6,8 @@ use optimizer_core::{
     defender::{
         build_defender_performance_plan, is_defender_mutation_target,
         is_defender_performance_tweak_id, plan_blocks_global_defender_disable,
-        DefenderControlConsent, DefenderPerformancePlanRequest, DefenderProtectionState,
-        DefenderScheduleState, DefenderTamperState, DEFENDER_DISABLE_GLOBAL_TWEAK_ID,
-        TARGET_DEFENDER_GLOBAL_DISABLE,
+        DefenderPerformancePlanRequest, DefenderProtectionState, DefenderScheduleState,
+        DefenderTamperState, DEFENDER_DISABLE_GLOBAL_TWEAK_ID, TARGET_DEFENDER_GLOBAL_DISABLE,
     },
     tweak_contracts::{PlanAction, TweakOperationKind, TweakPlan},
 };
@@ -63,7 +62,11 @@ pub fn apply_defender_performance_plan_to_fixture(
 
     let mut summary = DefenderSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -93,7 +96,11 @@ pub fn verify_defender_performance_plan_fixture(
 
     let mut summary = DefenderSettingsSummary::empty();
 
-    for item in plan.items.iter().filter(|item| item.action == PlanAction::Apply) {
+    for item in plan
+        .items
+        .iter()
+        .filter(|item| item.action == PlanAction::Apply)
+    {
         validate_tweak_id(&item.tweak_id)?;
         summary.item_count += 1;
 
@@ -358,7 +365,12 @@ impl DefenderSettingsError {
 
 impl fmt::Display for DefenderSettingsError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}: {}", self.reason.as_str(), self.reason.message())?;
+        write!(
+            formatter,
+            "{}: {}",
+            self.reason.as_str(),
+            self.reason.message()
+        )?;
 
         if let Some(tweak_id) = self.tweak_id() {
             write!(formatter, " ({tweak_id})")?;
@@ -380,8 +392,8 @@ mod tests {
     use optimizer_core::{
         backup::{capture_plan_backups, execute_rollback, RollbackRequest},
         defender::{
-            build_defender_performance_plan, DefenderExclusionCandidate, DefenderExclusionKind,
-            TARGET_DEFENDER_EXCLUSION_LIST, TARGET_DEFENDER_SCHEDULE_WINDOW,
+            build_defender_performance_plan, DefenderControlConsent, DefenderExclusionCandidate,
+            DefenderExclusionKind, TARGET_DEFENDER_EXCLUSION_LIST, TARGET_DEFENDER_SCHEDULE_WINDOW,
         },
         tweak_contracts::{
             BackupRequirement, PlannedChange, RebootPolicy, RollbackKind, RollbackPlan,
@@ -405,10 +417,7 @@ mod tests {
     fn scan_fixture_builds_schedule_recommendation_without_disabling_defender() {
         let report = crate::parse_system_scan_report(FIXTURE).expect("fixture should parse");
         let plan = build_defender_performance_plan_from_scan("plan-defender-fixture", &report);
-        let schedule = item(
-            &plan,
-            optimizer_core::defender::DEFENDER_SCHEDULE_TWEAK_ID,
-        );
+        let schedule = item(&plan, optimizer_core::defender::DEFENDER_SCHEDULE_TWEAK_ID);
 
         assert_eq!(schedule.action, PlanAction::Recommend);
         assert!(defender_plan_blocks_global_disable(&plan));
@@ -443,7 +452,10 @@ mod tests {
             .expect("Defender fixture apply should succeed");
 
         assert_eq!(applied.item_count, 2);
-        assert_eq!(fixture.value(TARGET_DEFENDER_SCHEDULE_WINDOW), Some("03:00-05:00"));
+        assert_eq!(
+            fixture.value(TARGET_DEFENDER_SCHEDULE_WINDOW),
+            Some("03:00-05:00")
+        );
         assert_eq!(
             fixture.value(TARGET_DEFENDER_EXCLUSION_LIST),
             Some("C:\\Games\\SteamLibrary\\steamapps\\common\\PUBG")
@@ -462,7 +474,10 @@ mod tests {
                 .expect("rollback should restore Defender fixture state");
         }
 
-        assert_eq!(fixture.value(TARGET_DEFENDER_SCHEDULE_WINDOW), Some("20:00-22:00"));
+        assert_eq!(
+            fixture.value(TARGET_DEFENDER_SCHEDULE_WINDOW),
+            Some("20:00-22:00")
+        );
         assert_eq!(fixture.value(TARGET_DEFENDER_EXCLUSION_LIST), Some(""));
     }
 
@@ -504,7 +519,10 @@ mod tests {
         let error = apply_defender_performance_plan_to_fixture(&mut fixture, &plan)
             .expect_err("global Defender disable must be denied");
 
-        assert_eq!(error.reason(), DefenderSettingsErrorReason::GlobalDisableDenied);
+        assert_eq!(
+            error.reason(),
+            DefenderSettingsErrorReason::GlobalDisableDenied
+        );
         assert_eq!(error.target(), Some(TARGET_DEFENDER_GLOBAL_DISABLE));
     }
 }

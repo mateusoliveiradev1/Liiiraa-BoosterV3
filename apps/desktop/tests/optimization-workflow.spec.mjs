@@ -6,26 +6,26 @@ const { expect, test } = loadPlaywrightTest();
 test("covers scan -> plan -> apply simulation -> verify -> rollback simulation", async ({ page }) => {
   await page.setContent(renderWorkflowHarness(optimizationWorkflow), { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByRole("heading", { name: "Read-only system scan" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Generate optimization plan" })).toBeDisabled();
-  await expect(page.getByText("Idle - Ready for read-only scan")).toBeVisible();
+  await expect(page.getByRole("heading", { exact: true, name: "Smart Scan" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open Smart Boost" })).toBeDisabled();
+  await expect(page.getByText("Ready - Smart Scan is ready to check this PC")).toBeVisible();
 
-  await page.getByRole("button", { name: "Start scan" }).click();
-  await expect(page.getByRole("progressbar", { name: "Read-only scan progress" })).toHaveAttribute(
+  await page.getByRole("button", { name: "Start Smart Scan" }).click();
+  await expect(page.getByRole("progressbar", { name: "Smart Scan progress" })).toHaveAttribute(
     "aria-valuenow",
     "100"
   );
-  await expect(page.getByText("Complete - Plan can be generated")).toBeVisible();
+  await expect(page.getByText("Complete - Smart Boost can open")).toBeVisible();
 
-  await page.getByRole("button", { name: "Generate optimization plan" }).click();
-  await expect(page.getByRole("heading", { name: "Optimization plan" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Safe recommendations" })).toContainText("Default apply");
-  await expect(page.getByRole("region", { name: "Competitive recommendations" })).toContainText("Review required");
-  await expect(page.getByRole("region", { name: "Lab recommendations" })).toContainText("Review required");
-  await expect(page.getByRole("region", { name: "Blocked recommendations" })).toContainText("No mutation allowed");
+  await page.getByRole("button", { name: "Open Smart Boost" }).click();
+  await expect(page.getByRole("heading", { name: "Smart Boost plan" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Safe lane" })).toContainText("Ready to apply");
+  await expect(page.getByRole("region", { name: "Competitive lane" })).toContainText("Review required");
+  await expect(page.getByRole("region", { name: "Lab lane" })).toContainText("Review required");
+  await expect(page.getByRole("region", { name: "Blocked lane" })).toContainText("Blocked from apply");
 
-  await page.getByRole("button", { name: "Apply safe only" }).click();
-  await expect(page.getByRole("heading", { name: "Apply simulation" })).toBeVisible();
+  await page.getByRole("button", { name: "Apply Safe Boost" }).click();
+  await expect(page.getByRole("heading", { name: "Safe Boost simulation" })).toBeVisible();
   await expect(page.getByTestId("step-backup")).toContainText("Backup");
   await expect(page.getByTestId("step-apply")).toContainText("Apply");
   await expect(page.getByTestId("step-verify")).toContainText("Verify");
@@ -39,12 +39,12 @@ test("covers scan -> plan -> apply simulation -> verify -> rollback simulation",
 
   await page.getByRole("button", { name: "Verify simulated changes" }).click();
   await expect(page.getByText("Read-back verified for safe changes")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open rollback" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Open Recovery" })).toBeEnabled();
 
-  await page.getByRole("button", { name: "Open rollback" }).click();
-  await expect(page.getByRole("heading", { name: "Rollback simulation" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Rollback timeline" })).toContainText("Safe gaming baseline");
-  await expect(page.getByRole("region", { name: "Rollback timeline" })).toContainText("Restore Balanced");
+  await page.getByRole("button", { name: "Open Recovery" }).click();
+  await expect(page.getByRole("heading", { name: "Recovery simulation" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Recovery timeline" })).toContainText("Safe gaming baseline");
+  await expect(page.getByRole("region", { name: "Recovery timeline" })).toContainText("Restore Balanced");
 
   await page.getByRole("button", { name: /Restore all for Safe gaming baseline/i }).click();
   await expect(page.getByText("Rollback simulation complete")).toBeVisible();
@@ -147,28 +147,28 @@ function renderWorkflowHarness(workflow) {
       <main>
         <header class="panel">
           <p class="muted">Liiiraa Booster critical workflow</p>
-          <h1>Scan, plan, apply, verify, rollback</h1>
+          <h1>Smart Scan, Smart Boost, verify, recover</h1>
           <nav class="actions" aria-label="Workflow simulation stages">
             <button type="button" data-stage-button="scan" aria-current="step">Scan</button>
-            <button type="button" data-stage-button="plan">Plan</button>
+            <button type="button" data-stage-button="plan">Smart Boost</button>
             <button type="button" data-stage-button="apply">Apply</button>
-            <button type="button" data-stage-button="rollback">Rollback</button>
+            <button type="button" data-stage-button="rollback">Recovery</button>
           </nav>
         </header>
 
         <section class="panel" data-panel="scan" aria-labelledby="scan-title">
-          <h2 id="scan-title">Read-only system scan</h2>
+          <h2 id="scan-title">Smart Scan</h2>
           <p id="scan-state">${escapeHtml(workflow.scan.states[0].label)} - ${escapeHtml(workflow.scan.states[0].detail)}</p>
-          <progress aria-label="Read-only scan progress" id="scan-progress" max="100" value="0"></progress>
+          <progress aria-label="Smart Scan progress" id="scan-progress" max="100" value="0"></progress>
           <div class="actions">
-            <button class="primary" id="start-scan" type="button">Start scan</button>
-            <button id="generate-plan" type="button" disabled>Generate optimization plan</button>
+            <button class="primary" id="start-scan" type="button">Start Smart Scan</button>
+            <button id="generate-plan" type="button" disabled>Open Smart Boost</button>
           </div>
           ${renderFindings(workflow.scan.findings)}
         </section>
 
         <section class="panel" data-panel="plan" aria-labelledby="plan-title" hidden>
-          <h2 id="plan-title">Optimization plan</h2>
+          <h2 id="plan-title">Smart Boost plan</h2>
           <p class="muted">Safe changes are the only default apply path; Competitive, Lab, and Blocked rows stay review-only.</p>
           <div class="groups">
             ${workflow.optimize.groups.map(renderPlanGroup).join("")}
@@ -181,7 +181,7 @@ function renderWorkflowHarness(workflow) {
         </section>
 
         <section class="panel" data-panel="apply" aria-labelledby="apply-title" hidden>
-          <h2 id="apply-title">Apply simulation</h2>
+          <h2 id="apply-title">Safe Boost simulation</h2>
           <p id="apply-status" class="muted">Ready to simulate ${escapeHtml(safeGroup.tweaks.length.toString())} safe changes with backup first.</p>
           <ol class="steps" aria-label="Apply safety steps">
             ${workflow.optimize.applySteps.map(renderApplyStep).join("")}
@@ -189,13 +189,13 @@ function renderWorkflowHarness(workflow) {
           <div class="actions">
             <button class="primary" id="run-apply" type="button">Run apply simulation</button>
             <button id="verify-changes" type="button" disabled>Verify simulated changes</button>
-            <button id="open-rollback" type="button" disabled>Open rollback</button>
+            <button id="open-rollback" type="button" disabled>Open Recovery</button>
           </div>
         </section>
 
         <section class="panel" data-panel="rollback" aria-labelledby="rollback-title" hidden>
-          <h2 id="rollback-title">Rollback simulation</h2>
-          <section aria-label="Rollback timeline">
+          <h2 id="rollback-title">Recovery simulation</h2>
+          <section aria-label="Recovery timeline">
             <h3>${escapeHtml(firstRollbackSession.label)}</h3>
             <p class="muted">${escapeHtml(firstRollbackSession.summary)}</p>
             ${firstRollbackSession.items.map(renderRollbackItem).join("")}
@@ -222,7 +222,7 @@ function renderWorkflowHarness(workflow) {
         document.querySelector("#start-scan").addEventListener("click", () => {
           document.querySelector("#scan-progress").value = 100;
           document.querySelector("#scan-progress").setAttribute("aria-valuenow", "100");
-          document.querySelector("#scan-state").textContent = "Complete - Plan can be generated";
+          document.querySelector("#scan-state").textContent = "Complete - Smart Boost can open";
           document.querySelector("#generate-plan").disabled = false;
         });
 
@@ -268,10 +268,10 @@ function renderFindings(findings) {
 }
 
 function renderPlanGroup(group) {
-  const applyState = group.applyEnabled ? "Default apply" : group.id === "blocked" ? "No mutation allowed" : "Review required";
+  const applyState = group.applyEnabled ? "Ready to apply" : group.id === "blocked" ? "Blocked from apply" : "Review required";
 
   return `
-    <section class="group" aria-label="${escapeHtml(group.label)} recommendations" data-tone="${escapeHtml(group.tone)}">
+    <section class="group" aria-label="${escapeHtml(group.label)} lane" data-tone="${escapeHtml(group.tone)}">
       <h3>${escapeHtml(group.label)}</h3>
       <p>${escapeHtml(group.summary)}</p>
       <strong>${escapeHtml(applyState)}</strong>

@@ -11,6 +11,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-toggle-maximize",
     "allow-get-ipc-security-status",
+    "allow-get-live-resource-snapshot",
     "allow-get-updater-configuration",
     "allow-check-signed-update",
     "allow-run-read-only-system-scan"

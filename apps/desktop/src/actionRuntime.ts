@@ -167,9 +167,9 @@ function inferDesktopAction(action: DesktopActionDescriptor): Omit<NormalizedDes
     return {
       command: /cancel/.test(text) ? "status" : "run-read-only-scan",
       feedback: /cancel/.test(text)
-        ? "Scan cancellation is acknowledged; no optimizer writes were started."
-        : "Opening the read-only scan. Live system reads run only inside the Tauri desktop shell.",
-      successFeedback: "Read-only scan command completed or the mock scan state is visible.",
+        ? "Smart Scan paused. No changes were applied."
+        : "Opening Smart Scan. The desktop app checks this PC safely.",
+      successFeedback: "Smart Scan is running or completed.",
       targetRoute: "scan",
       tone: "active"
     };
@@ -268,7 +268,7 @@ function inferDesktopAction(action: DesktopActionDescriptor): Omit<NormalizedDes
   if (/export[-\s].*plan|export.*plano|exportar.*plan|exportar.*plano/.test(text)) {
     return {
       command: "export-plan",
-      feedback: "Optimization plan export is staged from the visible tweak ledger.",
+      feedback: "Smart Boost plan export is ready with impact and recovery details.",
       targetRoute: "optimize",
       tone: "active"
     };
@@ -320,7 +320,7 @@ function inferDesktopAction(action: DesktopActionDescriptor): Omit<NormalizedDes
 async function runDesktopActionCommand(action: NormalizedDesktopAction) {
   if (action.command === "run-read-only-scan") {
     if (!isDesktopTauriRuntime()) {
-      return "Mock scan state is visible in the browser preview; live inventory runs in Tauri.";
+      return "Smart Scan preview is active. Live PC checks run in the desktop app.";
     }
 
     const response = await invoke<SystemScanResponse>("run_read_only_system_scan", {
@@ -353,7 +353,7 @@ async function runDesktopActionCommand(action: NormalizedDesktopAction) {
   }
 
   if (action.command === "apply-safe-plan") {
-    return "Safe tweaks are selected; real writes remain gated behind backup and verification.";
+    return "Safe Boost is selected; changes wait for backup and verification.";
   }
 
   return undefined;

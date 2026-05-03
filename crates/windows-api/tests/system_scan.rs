@@ -1,3 +1,9 @@
+//! Integration coverage for read-only Windows system scan parsing.
+
+use optimizer_core as _;
+use serde as _;
+use serde_json as _;
+
 use windows_api::{parse_system_scan_report, scan_system, SystemScanMode};
 
 const FIXTURE: &str = include_str!("fixtures/system_scan.json");
@@ -17,8 +23,9 @@ fn fixture_covers_t040_inventory_sections() {
         .security
         .optional_features
         .iter()
-        .any(|feature| feature.name == "VirtualMachinePlatform"
-            && feature.install_state == Some(1)));
+        .any(
+            |feature| feature.name == "VirtualMachinePlatform" && feature.install_state == Some(1)
+        ));
     assert_eq!(report.storage.storage_sense.enabled, Some(false));
     assert_eq!(report.storage.trim.ntfs_disable_delete_notify, Some(0));
     assert_eq!(report.storage.ntfs_metadata.disable_last_access, Some(0));
@@ -26,7 +33,10 @@ fn fixture_covers_t040_inventory_sections() {
     assert_eq!(report.storage.direct_storage.nvme_present, Some(true));
     assert_eq!(report.graphics.hags.value, Some(1));
     assert_eq!(report.graphics.windowed_optimizations.supported, Some(true));
-    assert!(report.graphics.high_performance_gpu_available.unwrap_or(false));
+    assert!(report
+        .graphics
+        .high_performance_gpu_available
+        .unwrap_or(false));
 }
 
 #[test]

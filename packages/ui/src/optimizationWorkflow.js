@@ -122,20 +122,20 @@ export const optimizationWorkflow = {
     scopes: [
       {
         id: "system",
-        label: "System inventory",
-        detail: "OS, CPU, RAM, disks, active power plan",
+        label: "PC baseline",
+        detail: "Windows, CPU, memory, storage, and active power plan",
         checked: true
       },
       {
         id: "graphics",
-        label: "Graphics path",
-        detail: "Driver, display refresh, VRR, HAGS, overlays",
+        label: "Graphics and display",
+        detail: "Driver, refresh rate, VRR, HAGS, and overlays",
         checked: true
       },
       {
         id: "gaming",
-        label: "Gaming surface",
-        detail: "Game Mode, captures, PUBG path, BattlEye state",
+        label: "Game readiness",
+        detail: "Game Mode, captures, PUBG location, and BattlEye state",
         checked: true
       },
       {
@@ -148,45 +148,45 @@ export const optimizationWorkflow = {
     states: [
       {
         id: "idle",
-        label: "Idle",
-        detail: "Ready for read-only scan",
+        label: "Ready",
+        detail: "Smart Scan is ready to check this PC",
         state: "complete"
       },
       {
         id: "scanning",
-        label: "Scanning",
-        detail: "Inventory and guardrails",
+        label: "Checking PC",
+        detail: "Collecting performance and safety signals",
         state: "active"
       },
       {
         id: "partial",
-        label: "Partial result",
-        detail: "Graphics checks complete",
+        label: "Graphics checked",
+        detail: "Display and driver checks are complete",
         state: "pending"
       },
       {
         id: "complete",
-        label: "Complete",
-        detail: "Plan can be generated",
+        label: "Boost ready",
+        detail: "Smart Boost can now open",
         state: "pending"
       },
       {
         id: "failed",
-        label: "Failed",
-        detail: "Retry keeps prior safe findings",
+        label: "Needs retry",
+        detail: "Retry keeps confirmed recommendations",
         state: "pending"
       },
       {
         id: "cancelled",
-        label: "Cancelled",
-        detail: "No system changes were made",
+        label: "Paused",
+        detail: "No changes were made",
         state: "pending"
       }
     ],
     progress: {
-      label: "Graphics path",
+      label: "Graphics check",
       percent: 62,
-      current: "Reading driver, VRR, and overlay state",
+      current: "Checking driver, VRR, and overlay state",
       completed: ["OS inventory", "CPU topology", "Active power plan", "PUBG process check"]
     },
     findings: [
@@ -194,40 +194,40 @@ export const optimizationWorkflow = {
         id: "capture",
         group: "High impact",
         risk: "Low",
-        title: "Background capture is enabled",
-        detail: "Safe Game DVR change can reduce recording overhead.",
+        title: "Background capture can be paused",
+        detail: "Safe Boost can reduce recording overhead when capture is unused.",
         tone: "success"
       },
       {
         id: "power",
         group: "High impact",
         risk: "Low",
-        title: "Balanced plan is active",
-        detail: "Liiiraa performance plan can be staged with rollback.",
+        title: "Balanced power plan found",
+        detail: "Safe Boost can prepare a reversible Liiiraa power plan.",
         tone: "success"
       },
       {
         id: "driver",
         group: "Moderate impact",
         risk: "Low",
-        title: "Driver branch is current",
-        detail: "No driver replacement recommendation required.",
+        title: "Driver is current",
+        detail: "No driver replacement is recommended.",
         tone: "neutral"
       },
       {
         id: "vbs",
         group: "Tradeoff",
         risk: "Medium",
-        title: "VBS and HVCI are visible",
-        detail: "Competitive plan requires explicit security disclosure.",
+        title: "Security tradeoff needs review",
+        detail: "Competitive changes explain the security impact before anything is applied.",
         tone: "warning"
       },
       {
         id: "defender",
         group: "Blocked",
         risk: "Critical",
-        title: "Global Defender disable denied",
-        detail: "Use narrow verified exclusions or scheduling only.",
+        title: "Unsafe Defender change blocked",
+        detail: "Only narrow verified exclusions or scheduling are allowed.",
         tone: "danger"
       }
     ]
@@ -236,22 +236,22 @@ export const optimizationWorkflow = {
     actions: [
       {
         id: "apply-safe",
-        label: "Apply safe only",
+        label: "Apply Safe Boost",
         variant: "primary"
       },
       {
         id: "include-competitive",
-        label: "Include competitive",
+        label: "Review Competitive",
         variant: "secondary"
       },
       {
         id: "inspect-lab",
-        label: "Inspect lab",
+        label: "Inspect Lab",
         variant: "secondary"
       },
       {
         id: "export-plan",
-        label: "Export plan",
+        label: "Export Boost Plan",
         variant: "secondary"
       },
       {
@@ -264,113 +264,113 @@ export const optimizationWorkflow = {
       {
         id: "safe",
         label: "Safe",
-        summary: "Default reversible changes",
+        summary: "Low-risk reversible boost",
         tone: "success",
         applyEnabled: true,
         tweaks: [
           {
             id: "game.capture.background.off",
-            change: "Disable background recording when unused",
+            change: "Pause unused background recording",
             expectedImpact: "Lower capture overhead",
             risk: "Low",
-            rollback: "HKCU/HKLM values backed up",
+            rollback: "Capture setting saved first",
             reboot: "No",
             confidence: "High",
-            why: "Capture is enabled and no recording workflow was detected."
+            why: "Capture is enabled and no active recording workflow was detected."
           },
           {
             id: "power.plan.liiiraa-balanced",
-            change: "Create Liiiraa Boost - Balanced plan",
+            change: "Prepare Liiiraa Boost - Balanced",
             expectedImpact: "Stable reversible baseline",
             risk: "Low",
-            rollback: "Restore previous active scheme",
+            rollback: "Restore previous power plan",
             reboot: "No",
             confidence: "High",
-            why: "Current plan can be duplicated before performance tuning."
+            why: "The current power plan can be saved before performance tuning."
           },
           {
             id: "game.mode.verify",
-            change: "Verify Game Mode is enabled",
+            change: "Turn on Game Mode when needed",
             expectedImpact: "Windows gaming scheduling",
             risk: "Low",
-            rollback: "Back up user setting",
+            rollback: "Save current Game Mode choice",
             reboot: "No",
             confidence: "Medium",
-            why: "Game Mode is a supported gaming surface."
+            why: "Game Mode is the supported Windows path for gaming scheduling."
           }
         ]
       },
       {
         id: "competitive",
         label: "Competitive",
-        summary: "Explicit performance tradeoffs",
+        summary: "Review-only performance tradeoffs",
         tone: "warning",
         applyEnabled: false,
         tweaks: [
           {
             id: "security.hvci.tradeoff",
-            change: "Plan Memory Integrity off/on comparison",
+            change: "Review Memory Integrity comparison",
             expectedImpact: "Possible latency and FPS uplift",
             risk: "Medium",
             rollback: "Restore previous HVCI state",
             reboot: "Required",
             confidence: "Medium",
-            why: "Only valid when the user accepts the security tradeoff."
+            why: "Only valid after the security tradeoff is accepted."
           },
           {
             id: "game.hags.benchmark",
-            change: "Benchmark HAGS before and after",
+            change: "Benchmark HAGS before changing it",
             expectedImpact: "Hardware-dependent frametime change",
             risk: "Medium",
             rollback: "Restore previous graphics setting",
             reboot: "Maybe",
             confidence: "Medium",
-            why: "The matrix rejects a universal HAGS default."
+            why: "HAGS results vary by hardware, driver, and game."
           }
         ]
       },
       {
         id: "lab",
         label: "Lab",
-        summary: "Advanced benchmark experiments",
+        summary: "Advanced tests with benchmarks",
         tone: "lab",
         applyEnabled: false,
         tweaks: [
           {
             id: "net.rsc.profile",
-            change: "Adapter-specific RSC experiment",
+            change: "Test adapter-specific RSC",
             expectedImpact: "Latency or throughput diagnosis",
             risk: "High",
             rollback: "Adapter state backup",
             reboot: "Adapter restart",
             confidence: "Low",
-            why: "Only useful with evidence from VPN, capture, or driver issues."
+            why: "Useful only with evidence from VPN, capture, or driver issues."
           }
         ]
       },
       {
         id: "blocked",
         label: "Blocked",
-        summary: "Education only",
+        summary: "Never applied",
         tone: "danger",
         applyEnabled: false,
         tweaks: [
           {
             id: "blocked.defender.disable",
-            change: "Deny global Defender disable",
-            expectedImpact: "Not applicable",
+            change: "Keep Defender protection on",
+            expectedImpact: "Blocked for safety",
             risk: "Critical",
-            rollback: "No mutation allowed",
+            rollback: "Not applied",
             reboot: "N/A",
             confidence: "High",
-            why: "The matrix treats this as a security regression."
+            why: "Disabling Defender globally is treated as a security regression."
           },
           {
             id: "blocked.anticheat-tamper",
-            change: "Deny BattlEye and PUBG memory tamper",
-            expectedImpact: "Not applicable",
+            change: "Block BattlEye and PUBG memory tamper",
+            expectedImpact: "Blocked for safety",
             risk: "Critical",
-            rollback: "No mutation allowed",
+            rollback: "Not applied",
             reboot: "N/A",
             confidence: "High",
             why: "Anti-cheat safety is non-negotiable."
@@ -383,31 +383,31 @@ export const optimizationWorkflow = {
         id: "backup",
         label: "Backup",
         state: "complete",
-        detail: "Snapshot power, capture, NVIDIA, and registry values"
+        detail: "Saving power, capture, GPU profile, and Windows settings"
       },
       {
         id: "apply",
         label: "Apply",
         state: "active",
-        detail: "Writing safe changes only"
+        detail: "Applying Safe Boost changes only"
       },
       {
         id: "verify",
         label: "Verify",
         state: "pending",
-        detail: "Read back values and reboot markers"
+        detail: "Confirming results and restart notes"
       },
       {
         id: "benchmark",
         label: "Benchmark prompt",
         state: "pending",
-        detail: "Capture before/after metadata"
+        detail: "Capture before and after results"
       },
       {
         id: "rollback",
         label: "Rollback if needed",
         state: "pending",
-        detail: "Restore all changed values for the session"
+        detail: "Restore this boost session if needed"
       }
     ]
   },
@@ -697,7 +697,7 @@ export const optimizationWorkflow = {
           id: "battleye",
           label: "Mutation guard",
           value: "Defer while running",
-          detail: "Profile writes are blocked when PUBG or BattlEye is active.",
+          detail: "Profile changes are blocked when PUBG or BattlEye is active.",
           tone: "warning"
         },
         {
@@ -945,7 +945,7 @@ export const optimizationWorkflow = {
           label: "NVIDIA profile",
           value: "TslGame.exe scoped",
           detail:
-            "Use the PUBG profile link for max performance, highest refresh, and texture-filtering choices; block writes while PUBG or BattlEye is running.",
+            "Use the PUBG profile link for max performance, highest refresh, and texture-filtering choices; block changes while PUBG or BattlEye is running.",
           tone: "active"
         },
         {
