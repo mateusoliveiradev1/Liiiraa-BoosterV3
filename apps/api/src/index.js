@@ -34,6 +34,14 @@ export {
   validateBenchmarkSyncEnvelope
 } from "./benchmark-sync.js";
 export {
+  API_CRASH_REPORTING_VERSION,
+  CRASH_REPORTING_PROCEDURE,
+  assertApiCrashReportingCoverage,
+  createCrashReportIngestDecision,
+  requireCrashReportCloudUpload,
+  validateCrashReportEnvelope
+} from "./crash-reporting.js";
+export {
   createCatalogDeliveryResponse,
   loadCatalogRollbackControls
 } from "./catalog-delivery.js";
