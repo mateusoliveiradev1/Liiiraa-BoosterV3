@@ -654,7 +654,7 @@ enum AdvancedNetworkPropertyKind {
 
 #[derive(Clone, Copy)]
 struct AdvancedLabItemInput<'a> {
-    tweak_id: &'a str,
+    tweak_id: &'static str,
     kind: AdvancedNetworkPropertyKind,
     desired_value: &'a str,
     consent: NetworkControlConsent,
